@@ -1,0 +1,21 @@
+{
+    "status": "failed",
+    "stage": "complete",
+    "kind": "mechanics",
+    "passed": [],
+    "failed": [
+        "Stopped for requested design correction: preserve impact damage, telegraph enemy lunges and repel enemies before shield formation"
+    ],
+    "measurements": [],
+    "chosenLaws": [],
+    "seed": 2718,
+    "world": 1,
+    "upgrades": 0,
+    "kills": 2,
+    "layoutChecks": 0,
+    "staffHits": 3,
+    "elapsed": 295.7337951660156,
+    "playerHealth": 120.86396026611328,
+    "environmentShare": 1.0,
+    "naturalCombat": true
+}

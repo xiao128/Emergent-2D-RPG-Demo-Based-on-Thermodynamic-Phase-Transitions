@@ -1,0 +1,41 @@
+failures=0
+PASS World 1 has two clock guards
+PASS World 1 fragments unlock the clock
+PASS World 1 offers only current document rules
+PASS World 1 choice starts transition
+PASS World 1 advances and retains its rule
+PASS World 2 has two clock guards
+PASS World 2 fragments unlock the clock
+PASS World 2 offers only current document rules
+PASS World 2 choice starts transition
+PASS World 2 advances and retains its rule
+PASS World 3 has two clock guards
+PASS World 3 fragments unlock the clock
+PASS World 3 offers only current document rules
+PASS World 3 choice starts transition
+PASS World 3 advances and retains its rule
+PASS World 4 has two clock guards
+PASS World 4 fragments unlock the clock
+PASS World 4 offers only current document rules
+PASS World 4 choice starts transition
+PASS World 4 advances and retains its rule
+PASS World 5 has two clock guards
+PASS World 5 fragments unlock the clock
+PASS World 5 offers only current document rules
+PASS World 5 choice starts transition
+PASS World 5 advances and retains its rule
+PASS World 6 has two clock guards
+PASS World 6 fragments unlock the clock
+PASS World 6 offers only current document rules
+PASS World 6 choice starts transition
+PASS World 6 advances and retains its rule
+PASS World 7 has two clock guards
+PASS World 7 fragments unlock the clock
+PASS World 7 offers only current document rules
+PASS World 7 choice starts transition
+PASS World 7 advances and retains its rule
+PASS Eighth world creates the boss
+PASS Boss defeat enters victory
+PASS Restart clears progress and laws
+PASS Player death enters defeat
+PASS Restart after defeat restores playable state

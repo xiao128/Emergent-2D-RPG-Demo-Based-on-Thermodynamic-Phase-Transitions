@@ -1,0 +1,37 @@
+{
+    "status": "passed",
+    "stage": "complete",
+    "kind": "combination",
+    "passed": [
+        "Cold bounce + impact heat + thermal mass: real wall contact warms and lightens the surviving rebounding rock",
+        "The world displays the whole collision, heat and acceleration cause chain",
+        "Abrasion + thermal mass + fission: sliding crosses the light-mass threshold and produces an actual explosion"
+    ],
+    "failed": [],
+    "measurements": [
+        {
+            "name": "collision chain mass before",
+            "value": 2.496000051498413
+        },
+        {
+            "name": "collision chain mass after",
+            "value": 1.6014028787612916
+        },
+        {
+            "name": "collision chain rebound speed",
+            "value": 22.733644485473634
+        }
+    ],
+    "chosenLaws": [],
+    "seed": 0,
+    "world": 0,
+    "upgrades": 0,
+    "kills": 0,
+    "layoutChecks": 0,
+    "staffHits": 0,
+    "elapsed": 0.0,
+    "playerHealth": 0.0,
+    "environmentShare": 0.0,
+    "simulationSpeed": 1.0,
+    "naturalCombat": false
+}

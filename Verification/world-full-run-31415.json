@@ -1,0 +1,24 @@
+{
+    "status": "interrupted",
+    "stage": "Stopped at user request; manual playtest handoff",
+    "kind": "full-run",
+    "passed": [
+        "Actual clock choice in world 1"
+    ],
+    "failed": [],
+    "measurements": [],
+    "chosenLaws": [
+        "SuperSlide"
+    ],
+    "seed": 31415,
+    "world": 2,
+    "upgrades": 1,
+    "kills": 2,
+    "layoutChecks": 0,
+    "staffHits": 43,
+    "elapsed": 676.554443359375,
+    "playerHealth": 170.72911071777345,
+    "environmentShare": 1.0,
+    "simulationSpeed": 4.0,
+    "naturalCombat": true
+}

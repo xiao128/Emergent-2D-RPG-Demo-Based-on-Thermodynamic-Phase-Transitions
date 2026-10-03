@@ -1,0 +1,21 @@
+{
+    "status": "failed",
+    "stage": "complete",
+    "kind": "mechanics",
+    "passed": [],
+    "failed": [
+        "Editor forced domain reload interrupted the controller and singleton"
+    ],
+    "measurements": [],
+    "chosenLaws": [],
+    "seed": 2718,
+    "world": 1,
+    "upgrades": 0,
+    "kills": 0,
+    "layoutChecks": 0,
+    "staffHits": 0,
+    "elapsed": 335.3126525878906,
+    "playerHealth": 180.0,
+    "environmentShare": 0.0,
+    "naturalCombat": true
+}

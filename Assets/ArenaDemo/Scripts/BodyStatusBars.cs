@@ -1,0 +1,57 @@
+using UnityEngine;
+namespace PhaseArena
+{
+    // World-space indicators: independent of body rotation and sprite animation.
+    [RequireComponent(typeof(ThermoBody))]
+    public class BodyStatusBars : MonoBehaviour
+    {
+        public SpriteRenderer manaFill,manaBack;
+        ThermoBody body;
+        PlayerMage mage;
+        SpriteRenderer healthBack;
+        void Awake() { body=GetComponent<ThermoBody>(); mage=GetComponent<PlayerMage>(); }
+        public void EnsureManaBar()
+        {
+            if(body==null) body=GetComponent<ThermoBody>();
+            if(body.kind!=BodyKind.Player) return;
+            if(mage==null) mage=GetComponent<PlayerMage>();
+            if(mage==null || body.healthFill==null || manaFill!=null) return;
+            var back=new GameObject("Mini Mana Back"); back.transform.SetParent(transform,false);
+            manaBack=back.AddComponent<SpriteRenderer>(); manaBack.sprite=body.healthFill.sprite; manaBack.sharedMaterial=body.healthFill.sharedMaterial; manaBack.color=new Color(.03f,.08f,.16f);
+            var pivot=new GameObject("Mini Mana Pivot").transform; pivot.SetParent(transform,false);
+            var fill=new GameObject("Mini Mana Fill"); fill.transform.SetParent(pivot,false);
+            manaFill=fill.AddComponent<SpriteRenderer>(); manaFill.sprite=body.healthFill.sprite; manaFill.sharedMaterial=body.healthFill.sharedMaterial; manaFill.color=new Color(.2f,.6f,1);
+        }
+        public void Refresh()
+        {
+            if(body==null) body=GetComponent<ThermoBody>();
+            if(body.healthFill==null || body.visual==null) return;
+            EnsureManaBar();
+            float top=SpriteGeometry.VisibleTop(body.visual);
+            var col=body.Collider!=null ? body.Collider : body.GetComponent<Collider2D>();
+            Vector3 center=new Vector3(col.bounds.center.x,top+.18f,transform.position.z);
+            float width=body.healthBarSize.x*Mathf.Abs(transform.lossyScale.x);
+            var pivot=body.healthFill.transform.parent;
+            pivot.rotation=Quaternion.identity; pivot.position=center-Vector3.right*width*.5f;
+            body.healthFill.transform.localRotation=Quaternion.identity;
+            float healthRatio=Mathf.Clamp01(body.health/Mathf.Max(1,body.maxHealth));
+            body.healthFill.transform.localScale=new Vector3(body.healthBarSize.x*healthRatio,body.healthBarSize.y,1);
+            body.healthFill.transform.localPosition=new Vector3(body.healthBarSize.x*.5f*healthRatio,0,0);
+            int order=body.visual.sortingOrder+10;
+            body.healthFill.sortingOrder=order+1;
+            if(healthBack==null) { var back=transform.Find("Health Back"); if(back!=null) healthBack=back.GetComponent<SpriteRenderer>(); }
+            if(healthBack!=null) { healthBack.transform.rotation=Quaternion.identity; healthBack.transform.position=center; healthBack.sortingOrder=order; }
+            if(manaFill==null) return;
+            float sx=Mathf.Max(.01f,Mathf.Abs(transform.lossyScale.x)), sy=Mathf.Max(.01f,Mathf.Abs(transform.lossyScale.y));
+            float ratio=Mathf.Clamp01(mage.Mana/Mathf.Max(1,mage.maxMana));
+            center.y-=.11f;
+            manaBack.transform.rotation=Quaternion.identity; manaBack.transform.position=center;
+            manaBack.transform.localScale=new Vector3(width/sx,.075f/sy,1); manaBack.sortingOrder=order;
+            manaFill.transform.parent.rotation=Quaternion.identity; manaFill.transform.parent.position=center-Vector3.right*width*.5f;
+            manaFill.transform.localRotation=Quaternion.identity;
+            manaFill.transform.localPosition=new Vector3(width/sx*.5f*ratio,0,0);
+            manaFill.transform.localScale=new Vector3(width/sx*ratio,.05f/sy,1); manaFill.sortingOrder=order+1;
+        }
+        void LateUpdate() { Refresh(); }
+    }
+}

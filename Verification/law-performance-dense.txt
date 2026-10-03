@@ -1,0 +1,1 @@
+250 dense projectiles; gravity+repulsion; dt=0; 10 ticks. LegacyMeanMs=150.223 NewMeanMs=135.383 NeighborCandidates=93625 speedup=1.11

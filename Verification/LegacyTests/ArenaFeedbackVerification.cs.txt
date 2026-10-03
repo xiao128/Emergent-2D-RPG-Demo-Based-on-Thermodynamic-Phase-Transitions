@@ -1,0 +1,206 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using PhaseArena;
+
+// Short physics/state fixtures for the user's growth/map/new-law feedback.
+// This is deliberately separate from a natural combat or balance playtest.
+public class ArenaFeedbackVerification : MonoBehaviour
+{
+    [Serializable] public class Report
+    {
+        public string status="running",kind="feedback physics and state fixtures";
+        public List<string> passed=new List<string>(),failed=new List<string>(),measurements=new List<string>();
+        public int layouts;
+    }
+    public Report report=new Report();
+    ArenaDirector game;
+    readonly List<ThermoBody> fixtures=new List<ThermoBody>();
+    public void Run() { game=ArenaDirector.Instance; StartCoroutine(Checks()); }
+    void Check(bool value,string message)
+    {
+        (value ? report.passed : report.failed).Add(message); Save();
+        if(!value) Debug.LogError("[FeedbackCheck] "+message);
+    }
+    void Save() { File.WriteAllText(Path.Combine(Application.dataPath,"../Verification/feedback-mechanics.json"),JsonUtility.ToJson(report,true)); }
+    bool Click(UnityEngine.UI.Button button)
+    {
+        Canvas.ForceUpdateCanvases();
+        var p=new PointerEventData(EventSystem.current) {position=RectTransformUtility.WorldToScreenPoint(null,button.transform.position)};
+        var hits=new List<RaycastResult>(); EventSystem.current.RaycastAll(p,hits);
+        if(!hits.Any(h=>h.gameObject==button.gameObject)) return false;
+        ExecuteEvents.Execute(button.gameObject,p,ExecuteEvents.pointerClickHandler); return true;
+    }
+    void Suspend()
+    {
+        foreach(var b in game.bodies.ToArray()) if(b!=null && b.IsEnemy)
+        { b.GetComponent<EnemyBrain>().enabled=false; b.Body.velocity=Vector2.zero; }
+        game.player.GetComponent<PlayerMage>().VerificationMove=Vector2.zero;
+    }
+    ThermoBody Fixture(ThermoBody prefab,Vector2 p,float health=500)
+    {
+        var b=Instantiate(prefab,p,Quaternion.identity,game.entities); b.maxHealth=b.health=health; b.isElite=false;
+        var ai=b.GetComponent<EnemyBrain>(); if(ai!=null) ai.enabled=false;
+        fixtures.Add(b); return b;
+    }
+    void Clear()
+    {
+        foreach(var b in fixtures) if(b!=null) { b.gameObject.SetActive(false); Destroy(b.gameObject); }
+        fixtures.Clear();
+        foreach(var b in game.bodies.ToArray()) if(b!=null && (b.kind==BodyKind.Projectile || b.kind==BodyKind.Shield))
+        { b.gameObject.SetActive(false); Destroy(b.gameObject); }
+        game.laws.Clear(); game.player.ResetAt(game.SpawnPosition);
+        var mage=game.player.GetComponent<PlayerMage>(); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+    }
+    Vector2 EmptyArea()
+    {
+        foreach(var c in game.worldGenerator.Layout.reachable)
+        {
+            Vector2 p=game.worldGenerator.Layout.Center(c);
+            if(Mathf.Abs(p.x)>28 || p.y<-22 || p.y>4) continue;
+            if(Physics2D.OverlapCircleAll(p,3.4f,(1<<8)|(1<<10)|(1<<12)).Length==0) return p;
+        }
+        throw new InvalidOperationException("No clear fixture area");
+    }
+    ThermoBody Barrier(Vector2 p)
+    {
+        var go=new GameObject("Expansion fixture wall"); go.transform.SetParent(game.entities); go.transform.position=p; go.layer=10;
+        var rb=go.AddComponent<Rigidbody2D>(); rb.bodyType=RigidbodyType2D.Static;
+        var col=go.AddComponent<BoxCollider2D>(); col.size=new Vector2(.2f,3);
+        var b=go.AddComponent<ThermoBody>(); b.kind=BodyKind.StaticObstacle; b.indestructible=true; fixtures.Add(b); return b;
+    }
+    IEnumerator Checks()
+    {
+        var t=game.tuning;
+        var reference=new WorldLayout(t,1,WorldLayout.SpawnAt(t));
+        bool layouts=true;
+        for(int seed=1;seed<=32;seed++) for(int world=1;world<=8;world++)
+        {
+            var map=new WorldLayout(t,seed+world*104729,WorldLayout.SpawnAt(t)); report.layouts++;
+            layouts &= map.Validate() && map.monsters.Count==19 && map.water.SetEquals(reference.water)
+                && map.props.Count(p=>p.kind==PropKind.Tree)==t.treeCount && map.props.Where(p=>p.kind==PropKind.Tree).All(p=>p.scale>=1.65f);
+        }
+        Check(layouts,"256 layouts retain one identical continuous river, enlarged trees, 19 roamers and reachable right-side clock/guards");
+        Check(reference.water.Count==t.width*t.riverWidth,"River spans every column without holes or random ponds");
+        Check(Enum.GetValues(typeof(WorldLaw)).Length==13,"Thirteen independent laws are defined for the real random pool");
+        game.randomSeed=2718;
+        Check(Click(game.hud.startButton),"Actual Start UI invokes the new run");
+        yield return new WaitForSeconds(.1f); Suspend();
+        Check(game.laws.Count==0 && game.bodies.Count(b=>b!=null && b.IsEnemy)==21,"Opening world has no variable laws and exactly 70 percent of the old total enemy count");
+        Check(game.SpawnPosition.x<0 && game.clock.position.x>0 && game.SpawnPosition==WorldLayout.SpawnAt(t),"Spawn stays on the left and the clock on the right");
+        Check(game.player.maxHealth==100 && game.bodies.Where(b=>b!=null && b.isElite).All(b=>b.health==60),"Opening player/guard health is 100/60");
+        Check(game.worldGenerator.props.Where(b=>b.kind==BodyKind.Tree).All(b=>b.Body.bodyType==RigidbodyType2D.Static && b.radius>=game.worldGenerator.treePrefab.radius*1.65f),"Larger trees use larger fixed colliders and remain destructible");
+        Check(game.worldGenerator.props.Where(b=>b.indestructible).All(b=>b.Body.bodyType==RigidbodyType2D.Static),"Giant rocks remain fixed and indestructible");
+        Check(Physics2D.maxTranslationSpeed>=240 && game.player.Body.collisionDetectionMode==CollisionDetectionMode2D.Continuous,"Engine translation limit and continuous detection support the raised game speed limits");
+        Vector2 zone=EmptyArea(); var mage=game.player.GetComponent<PlayerMage>();
+        var enemy=Fixture(game.lightEnemyPrefab,zone+Vector2.right*1.3f,t.lightHealth);
+        game.player.ResetAt(zone); Physics2D.SyncTransforms();
+        var hit=game.Melee(game.player,Vector2.right);
+        Check(hit==enemy && enemy.health<=6.01f,"A real opening staff hit removes twelve of a light enemy's eighteen HP");
+        Clear(); yield return null;
+        zone=EmptyArea(); var rock=Fixture(game.worldGenerator.rockPrefab,zone+Vector2.right*1.3f);
+        rock.baseMass=1; rock.ThermalStep(0); game.player.ResetAt(zone); Physics2D.SyncTransforms();
+        game.Melee(game.player,Vector2.right); float ordinary=rock.Body.velocity.x;
+        Clear(); yield return null;
+        zone=EmptyArea(); rock=Fixture(game.worldGenerator.rockPrefab,zone+Vector2.right*1.3f);
+        rock.baseMass=1; rock.ThermalStep(0); game.player.ResetAt(zone); game.laws.Add(WorldLaw.DoubleForce); Physics2D.SyncTransforms();
+        game.Melee(game.player,Vector2.right); float doubled=rock.Body.velocity.x;
+        Check(ordinary>0 && Mathf.Abs(doubled/ordinary-2)<.02f,"Greater Force doubles the actual staff-launched rock velocity under the same mass");
+        report.measurements.Add("Staff impulse speeds: "+ordinary+" / "+doubled);
+        Clear(); yield return null;
+        zone=EmptyArea(); rock=Fixture(game.worldGenerator.rockPrefab,zone+Vector2.right*1.3f);
+        enemy=Fixture(game.guardPrefab,zone+Vector2.right*3.2f,3000);
+        game.laws.Add(WorldLaw.ThermalMass); rock.baseMass=1; rock.temperature=300; rock.ThermalStep(0);
+        game.player.ResetAt(zone); Physics2D.SyncTransforms(); game.Melee(game.player,Vector2.right);
+        float hotSpeed=rock.Body.velocity.magnitude;
+        Check(hotSpeed>80 && hotSpeed<=t.rockSpeedLimit,"Heating plus the same real staff impulse exceeds the former rock speed limit");
+        yield return new WaitForSeconds(.08f);
+        Check(enemy!=null && enemy.health<2900,"The high-speed continuous collision actually hits the guard instead of tunneling past it");
+        report.measurements.Add("Heated staff-launched rock speed: "+hotSpeed+"; guard impact loss: "+(enemy!=null ? 3000-enemy.health : 3000));
+        Clear(); yield return null;
+        zone=EmptyArea(); var a=Fixture(game.worldGenerator.rockPrefab,zone); var b=Fixture(game.worldGenerator.rockPrefab,zone+Vector2.right*1.2f);
+        a.temperature=400; b.temperature=20; game.laws.Add(WorldLaw.Leidenfrost); Physics2D.SyncTransforms();
+        yield return new WaitForSeconds(.25f);
+        Check(a.Body.velocity.x<-.1f && b.Body.velocity.x>.1f,"Hot and cold nearby movable bodies physically repel in opposite directions");
+        Clear(); yield return null;
+        zone=EmptyArea(); a=Fixture(game.worldGenerator.rockPrefab,zone); b=Fixture(game.worldGenerator.rockPrefab,zone+Vector2.right*1.2f);
+        a.temperature=b.temperature=20; game.laws.Add(WorldLaw.Leidenfrost); Physics2D.SyncTransforms();
+        yield return new WaitForSeconds(.25f);
+        Check(a.Body.velocity.magnitude<.05f && b.Body.velocity.magnitude<.05f,"Equal-temperature nearby bodies do not gain a repulsion field");
+        Clear(); yield return null;
+        zone=EmptyArea(); enemy=Fixture(game.mediumEnemyPrefab,zone+Vector2.right*2.4f);
+        game.player.ResetAt(zone); game.laws.Add(WorldLaw.ThermalShock); enemy.temperature=-100; enemy.ThermalStep(0); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        int shocks=game.metrics.thermalShocks; mage.Cast(true,Vector2.right);
+        yield return new WaitForSeconds(.7f); mage.Cast(true,Vector2.right);
+        yield return new WaitForSeconds(.45f);
+        Check(enemy!=null && enemy.health<400 && game.metrics.thermalShocks>shocks,"Actual fire projectiles rapidly heating a frozen enemy trigger material-sized brittleness damage");
+        Clear(); yield return null;
+        zone=EmptyArea(); enemy=Fixture(game.mediumEnemyPrefab,zone); game.laws.Add(WorldLaw.ThermalShock);
+        enemy.temperature=-100; enemy.ThermalStep(0); enemy.AddHeat(105); shocks=game.metrics.thermalShocks;
+        yield return new WaitForSeconds(1.15f); enemy.AddHeat(105);
+        Check(game.metrics.thermalShocks==shocks && enemy.health>499,"Warming after the one-second window does not cause brittleness damage");
+        enemy.temperature=20; enemy.ThermalStep(0); enemy.AddHeat(150);
+        Check(game.metrics.thermalShocks==shocks,"Heating an unfrozen body does not cause brittleness damage");
+        Clear(); yield return null;
+        zone=EmptyArea(); rock=Fixture(game.worldGenerator.rockPrefab,zone); game.laws.Add(WorldLaw.ThermalExpansion);
+        float originalRadius=rock.radius; Vector3 rootScale=rock.transform.localScale; rock.AddHeat(300);
+        yield return new WaitForSeconds(.45f);
+        Check(rock.radius>originalRadius && rock.GetComponent<CircleCollider2D>().radius>originalRadius && rock.transform.localScale==rootScale,"Free hot matter enlarges its real footprint and sprite without scaling its rigidbody root");
+        rock.AddHeat(-1200); yield return new WaitForSeconds(1.4f);
+        Check(rock.radius<originalRadius && rock.ShapeScale<=.7f,"Cold matter contracts its collider and visual footprint");
+        Clear(); yield return null;
+        zone=EmptyArea(); rock=Fixture(game.worldGenerator.largeRockPrefab,zone); enemy=Fixture(game.mediumEnemyPrefab,zone+Vector2.right*1.08f);
+        enemy.Body.position=zone+Vector2.right*(rock.radius+enemy.radius+.04f);
+        game.laws.Add(WorldLaw.ThermalExpansion); rock.AddHeat(700); Physics2D.SyncTransforms();
+        yield return new WaitForSeconds(.25f);
+        Check(rock.ShapeScale<=1.001f && enemy.health>499,"An occupied footprint blocks expansion; overlap alone does not inflict crushing damage");
+        Clear(); yield return null;
+        zone=EmptyArea(); rock=Fixture(game.worldGenerator.largeRockPrefab,zone); enemy=Fixture(game.mediumEnemyPrefab,zone+Vector2.right*1.08f);
+        enemy.Body.position=zone+Vector2.right*(rock.radius+enemy.radius+.04f);
+        Barrier(zone+Vector2.right*(rock.radius+2*enemy.radius+.17f)); game.laws.Add(WorldLaw.ThermalExpansion); rock.AddHeat(700); Physics2D.SyncTransforms();
+        yield return new WaitForSeconds(.45f);
+        Check(rock.ShapeScale<=1.001f && enemy.health<499 && game.metrics.crushTicks>0,"Blocked hot matter crushes a creature trapped against an immovable wall without growing through it");
+        Clear(); yield return null;
+        zone=EmptyArea(); rock=Fixture(game.worldGenerator.rockPrefab,zone); rock.AddHeat(10000); float high=rock.temperature; rock.AddHeat(-20000);
+        Check(high==800 && rock.temperature==-600,"Body hard temperature limits are raised to minus 600 / plus 800 C");
+        var tile=game.worldGenerator.cells.Values.First(c=>!c.rough); tile.AddHeat(10000); high=tile.temperature; tile.AddHeat(-20000);
+        Check(high==800 && tile.temperature==-600,"Terrain uses the same raised temperature limits");
+        Clear(); yield return null;
+        // State fixtures exercise actual fragments, clock cards, world rebuilds
+        // and growth through the final boss; this is not natural combat.
+        for(int world=1;world<=7;world++)
+        {
+            Suspend();
+            foreach(var guard in game.bodies.Where(x=>x!=null && x.isElite).ToArray()) guard.Damage(100000,"Growth state fixture");
+            foreach(var shard in game.shards.ToArray()) { game.player.Body.position=shard.transform.position; yield return new WaitForSeconds(.08f); }
+            game.player.Body.position=game.clock.position;
+            Check(game.Fragments==2 && game.TryOpenClock(),"World "+world+": physical fragment pickup unlocks the right-side clock");
+            Check(game.Choices.Length==3 && game.Choices.Distinct().Count()==3 && game.Choices.All(l=>!game.Has(l)),"World "+world+": real random cards are distinct and unchosen");
+            // Allow the newly activated CanvasRenderer to become raycastable.
+            yield return null;
+            Check(Click(game.hud.choiceButtons[0]),"World "+world+": actual law card UI click advances the world");
+            yield return new WaitForSecondsRealtime(1.35f); Suspend();
+            Check(game.World==world+1 && game.player.health==t.PlayerHealthAt(world+1),"World "+(world+1)+": player HP grows and fully restores on refresh");
+            if(world<7) Check(game.bodies.Where(x=>x!=null && x.isElite).All(x=>x.health==t.EnemyHealthAt(t.guardHealth,world+1)),"World "+(world+1)+": guards use growing health");
+        }
+        var boss=game.bodies.FirstOrDefault(x=>x!=null && x.kind==BodyKind.Boss);
+        Check(game.State==RunState.Boss && boss!=null && boss.health==t.EnemyHealthAt(t.bossHealth,8),"Final boss spawns at the right-side clock with the eighth-world health curve");
+        report.measurements.Add("World 8 player / boss HP: "+game.player.maxHealth+" / "+(boss!=null ? boss.maxHealth : 0));
+        // Exclude old laws in an explicitly marked pool fixture to expose the
+        // new entries through the real three-card UI without a prescribed build.
+        game.Restart(); yield return new WaitForSeconds(.1f); Suspend();
+        foreach(var guard in game.bodies.Where(x=>x!=null && x.isElite).ToArray()) guard.Damage(100000,"Pool fixture");
+        foreach(var shard in game.shards.ToArray()) { game.player.Body.position=shard.transform.position; yield return new WaitForSeconds(.08f); }
+        foreach(WorldLaw law in Enum.GetValues(typeof(WorldLaw))) if((int)law<9) game.laws.Add(law);
+        game.player.Body.position=game.clock.position;
+        Check(game.TryOpenClock() && game.Choices.All(l=>(int)l>=9),"New laws appear in the real random three-card pool without prerequisites");
+        report.status=report.failed.Count==0 ? "passed" : "failed"; Save();
+        Debug.Log("[FeedbackCheck] Completed "+report.passed.Count+" passed / "+report.failed.Count+" failed");
+    }
+}
+#endif

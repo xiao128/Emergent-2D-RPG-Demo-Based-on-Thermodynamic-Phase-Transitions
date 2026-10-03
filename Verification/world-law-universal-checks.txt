@@ -1,0 +1,9 @@
+2026-10-02 Unity runtime law fixtures
+DOCX text extracted from word/document.xml; universal bodies and warm fast abrasion prerequisites checked.
+Five BodyKind categories: Rock, Projectile, Enemy, Boss, Player.
+Each category passed friction heating, warm high-speed mass erosion, cold friction heating before erosion, zero ice friction heat, cold/heavy and hot/light mass with preserved velocity, cold elastic material, super-slide drag, expansion, thermal shock, fission qualification.
+Gravity coefficients: 24 -> 30. Apply F*dt impulse across each thermal tick (previously single fixed-frame force).
+Each category gravity test: cold mass 5 source, hot mass 1 target at distance 4, dt .1; delta-v toward source = 1.31579.
+Each category passed Leidenfrost repulsion, collision heating, thermal arc, double force, vapor recoil.
+Player arc tested independently of existing .45-second damage grace after impact (reset actor state between these fixtures).
+Fixtures test the shared physical-law handlers with controlled temperatures/masses/speeds, not whole-run balance.

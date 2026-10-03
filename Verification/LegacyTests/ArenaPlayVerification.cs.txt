@@ -1,0 +1,643 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using PhaseArena;
+
+// Fixtures test isolated laws and state transitions. Full runs never alter health,
+// position, laws or enemy existence; they use the shipped controller and UI.
+public class ArenaPlayVerification : MonoBehaviour
+{
+    [Serializable] public class Measurement { public string name; public float value; public Measurement(string n,float v) { name=n; value=v; } }
+    [Serializable] public class Report
+    {
+        public string status="idle",stage,kind="mechanics";
+        public List<string> passed=new List<string>(),failed=new List<string>();
+        public List<Measurement> measurements=new List<Measurement>();
+        public List<string> chosenLaws=new List<string>();
+        public int seed,world,upgrades,kills,layoutChecks,staffHits;
+        public float elapsed,playerHealth,environmentShare,simulationSpeed=1;
+        public bool naturalCombat;
+    }
+    public Report report=new Report();
+    public float simulationSpeed=4;
+    ArenaDirector game;
+    PlayerMage mage;
+    readonly List<ThermoBody> fixtures=new List<ThermoBody>();
+    bool bot;
+    float botStart,deadline,saveAt,routeAt,rockWait,stuckAt;
+    int preference;
+    ThermoBody selectedRock;
+    Vector2 lastPosition;
+    readonly List<Vector2> route=new List<Vector2>();
+    Vector2 routeGoal;
+    int waypoint;
+    public void RunMechanics() { Init(); StartCoroutine(Mechanics()); }
+    public void RunCombinationChecks() { Init(); StartCoroutine(Combinations()); }
+    public void RunFullGame(int seed=2718,int build=0)
+    {
+        Init(); report=new Report { status="running",stage="starting full run",kind="full-run",naturalCombat=true,seed=seed,simulationSpeed=simulationSpeed };
+        preference=build; game.randomSeed=seed;
+        if(game.State==RunState.Title) Click(game.hud.startButton); else game.Restart();
+        bot=true; botStart=Time.time; deadline=Time.realtimeSinceStartup+1200; saveAt=0; routeAt=0; selectedRock=null;
+        lastPosition=game.player.Body.position; stuckAt=Time.time; Time.timeScale=simulationSpeed; Save();
+    }
+    void Init() { game=ArenaDirector.Instance; mage=game.player.GetComponent<PlayerMage>(); }
+    void Check(bool value,string name)
+    {
+        if(value) { report.passed.Add(name); Debug.Log("[WorldCheck] PASS "+name); }
+        else { report.failed.Add(name); Debug.LogError("[WorldCheck] FAIL "+name); }
+        Save();
+    }
+    void Measure(string name,float value) { report.measurements.Add(new Measurement(name,value)); Save(); }
+    void Save()
+    {
+        string dir=Path.Combine(Application.dataPath,"../Verification"); Directory.CreateDirectory(dir);
+        string file=report.naturalCombat ? "world-full-run-"+report.seed+".json" : report.kind=="combination" ? "world-combinations.json" : "world-mechanics.json";
+        File.WriteAllText(Path.Combine(dir,file),JsonUtility.ToJson(report,true));
+    }
+    bool Click(UnityEngine.UI.Button button)
+    {
+        if(button==null || !button.gameObject.activeInHierarchy) return false;
+        Canvas.ForceUpdateCanvases();
+        var pointer=new PointerEventData(EventSystem.current) { position=RectTransformUtility.WorldToScreenPoint(null,button.transform.position),button=PointerEventData.InputButton.Left };
+        var hits=new List<RaycastResult>(); EventSystem.current.RaycastAll(pointer,hits);
+        bool clickable=hits.Any(h=>h.gameObject==button.gameObject);
+        if(clickable) ExecuteEvents.Execute(button.gameObject,pointer,ExecuteEvents.pointerClickHandler);
+        return clickable;
+    }
+    ThermoBody Fixture(ThermoBody prefab,Vector2 p)
+    {
+        var b=Instantiate(prefab,p,Quaternion.identity,game.entities); b.isElite=false;
+        var ai=b.GetComponent<EnemyBrain>(); if(ai!=null) ai.enabled=false;
+        fixtures.Add(b); b.ThermalStep(0); return b;
+    }
+    void ClearFixtures()
+    {
+        foreach(var b in fixtures) if(b!=null) { b.gameObject.SetActive(false); Destroy(b.gameObject); }
+        fixtures.Clear();
+        foreach(var b in game.bodies.ToArray()) if(b!=null && (b.kind==BodyKind.Projectile || b.kind==BodyKind.Shield)) { b.gameObject.SetActive(false); Destroy(b.gameObject); }
+        game.player.ResetAt(game.SpawnPosition); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+    }
+    void SuspendEnemies()
+    {
+        foreach(var b in game.bodies) if(b!=null && b.IsEnemy) { b.GetComponent<EnemyBrain>().enabled=false; b.Body.velocity=Vector2.zero; }
+    }
+    Vector2 EmptyArea()
+    {
+        foreach(var cell in game.worldGenerator.Layout.reachable.OrderBy(c=>c.x).ThenBy(c=>c.y))
+        {
+            Vector2 p=game.worldGenerator.Layout.Center(cell);
+            if(p.magnitude<10 || Vector2.Distance(p,game.player.Body.position)<7) continue;
+            if(Physics2D.OverlapCircleAll(p,3.5f,(1<<8)|(1<<10)|(1<<12)).Length==0) return p;
+        }
+        return game.worldGenerator.SafeDryPosition(new Vector2(-20,15),1);
+    }
+    TerrainCell RoughLane()
+    {
+        return game.terrain.First(t=>t.rough && Physics2D.OverlapCircleAll(t.transform.position,2.5f,(1<<8)|(1<<10)).Length==0
+            && game.FloorAt((Vector2)t.transform.position+Vector2.right)!=null && game.FloorAt((Vector2)t.transform.position+Vector2.right).rough
+            && game.FloorAt((Vector2)t.transform.position+Vector2.right*2)!=null && game.FloorAt((Vector2)t.transform.position+Vector2.right*2).rough);
+    }
+    IEnumerator Combinations()
+    {
+        report=new Report { status="running",stage="continuous rule combinations",kind="combination" };
+        if(game.State==RunState.Title) Click(game.hud.startButton);
+        yield return new WaitForSeconds(.1f); SuspendEnemies(); ClearFixtures(); yield return null;
+        game.laws.Clear(); game.laws.Add(WorldLaw.ThermalMass); game.laws.Add(WorldLaw.ColdBounce); game.laws.Add(WorldLaw.ImpactHeat);
+        float safeY=0;
+        for(int y=-22;y<=22;y+=2) if(Physics2D.OverlapBoxAll(new Vector2(33,y),new Vector2(4,3),0,(1<<8)|(1<<10)|(1<<12)).Length==0) { safeY=y; break; }
+        var cold=Fixture(game.worldGenerator.rockPrefab,new Vector2(34.5f,safeY));
+        cold.baseMass=1.2f; cold.temperature=-70; cold.ThermalStep(0); cold.Body.velocity=Vector2.right*20;
+        float oldMass=cold.Mass;
+        yield return new WaitForSeconds(.11f);
+        Measure("collision chain mass before",oldMass);
+        Measure("collision chain mass after",cold!=null ? cold.Mass : 0);
+        Measure("collision chain rebound speed",cold!=null ? cold.Body.velocity.magnitude : 0);
+        Check(cold!=null && !cold.Dead && cold.temperature>-35 && cold.Mass<oldMass*.8f && cold.Body.velocity.x<-1,
+            "Cold bounce + impact heat + thermal mass: real wall contact warms and lightens the surviving rebounding rock");
+        Check(game.RecentReaction.Contains("变轻加速"),"The world displays the whole collision, heat and acceleration cause chain");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        game.laws.Add(WorldLaw.ThermalMass); game.laws.Add(WorldLaw.Abrasion); game.laws.Add(WorldLaw.Fission);
+        var cell=RoughLane(); var particle=Fixture(game.worldGenerator.rockPrefab,cell.transform.position);
+        particle.baseMass=.6f; particle.temperature=60; particle.ThermalStep(0);
+        yield return new WaitForSeconds(.25f);
+        particle.Body.velocity=Vector2.right*16;
+        float initialMass=particle.Mass; int count=game.metrics.explosions;
+        yield return new WaitForSeconds(.08f);
+        bool eroded=particle!=null ? particle.massRemaining<.99f && particle.Mass<initialMass : game.metrics.explosions>count;
+        yield return new WaitForSeconds(.5f);
+        Check(initialMass>game.tuning.fissionMass && eroded && game.metrics.explosions>count && (particle==null || particle.Dead),
+            "Abrasion + thermal mass + fission: sliding crosses the light-mass threshold and produces an actual explosion");
+        ClearFixtures(); game.laws.Clear();
+        report.status=report.failed.Count==0 ? "passed" : "failed"; report.stage="complete"; Save();
+    }
+    IEnumerator Mechanics()
+    {
+        report=new Report { status="running",stage="seeded layout checks",seed=2718 }; game.randomSeed=2718; Save();
+        for(int seed=1;seed<=100;seed++)
+        {
+            for(int world=1;world<=8;world++)
+            {
+                Vector2 spawn=WorldLayout.SpawnAt(game.tuning);
+                var layout=new WorldLayout(game.tuning,seed+world*104729,spawn);
+                report.layoutChecks++;
+                if(!layout.Validate() || layout.monsters.Count!=game.tuning.roamingCount || layout.props.Count(p=>p.kind==PropKind.Rock)<40)
+                    report.failed.Add("Invalid layout seed "+seed+" world "+world);
+                if(seed<=3)
+                {
+                    var copy=new WorldLayout(game.tuning,seed+world*104729,spawn);
+                    bool same=layout.water.SetEquals(copy.water) && layout.props.SequenceEqual(copy.props) && layout.monsters.SequenceEqual(copy.monsters);
+                    if(!same) report.failed.Add("Seed does not reproduce "+seed+" world "+world);
+                }
+            }
+            if(seed%5==0) { Save(); yield return null; }
+        }
+        Check(report.failed.Count==0,"800 world layouts are connected, populated and reproducible");
+        report.stage="live input and constant laws";
+        Check(Click(game.hud.startButton),"Start button is raycastable and invokes the real run");
+        yield return new WaitForSeconds(.15f);
+        SuspendEnemies();
+        Check(game.World==1 && game.laws.Count==0 && game.bodies.Count(b=>b!=null && b.IsEnemy)==game.tuning.roamingCount+2,"World one starts with zero variable laws and the configured roamers plus two guards");
+        Check(game.tuning.impactThreshold==1.8f,"Original universal collision damage threshold is retained");
+        Check(game.worldGenerator.props.Where(p=>p!=null && p.kind==BodyKind.Tree).All(p=>!p.indestructible && p.Body.bodyType==RigidbodyType2D.Static)
+            && game.worldGenerator.props.Count(p=>p!=null && p.indestructible && p.kind==BodyKind.Rock && p.radius>1.2f)>=10,
+            "Generated world uses fixed destructible trees and visibly giant indestructible rocks");
+        Check(game.worldGenerator.props.Where(p=>p!=null && p.kind==BodyKind.Rock && !p.indestructible).All(p=>p.Body.bodyType==RigidbodyType2D.Dynamic),
+            "Small stones remain movable ingredients rather than fixed breakable medium obstacles");
+        Vector2 before=game.player.Body.position; mage.VerificationMove=Vector2.right;
+        yield return null; yield return new WaitForFixedUpdate();
+        yield return new WaitForSeconds(.6f); mage.VerificationMove=Vector2.zero;
+        Check(game.player.Body.position.x-before.x>1,"Real force controller moves the player");
+        float normalSpeed=game.player.Body.velocity.x; Measure("normal walking speed",normalSpeed);
+        game.player.ResetAt(game.SpawnPosition); mage.ResetTools(); mage.VerificationMove=Vector2.right; mage.VerificationSlowWalk=true;
+        before=game.player.Body.position;
+        yield return null; yield return new WaitForFixedUpdate();
+        yield return new WaitForSeconds(.6f); mage.VerificationMove=Vector2.zero;
+        Measure("slow walking speed",game.player.Body.velocity.x);
+        Check(game.player.Body.velocity.x>1 && game.player.Body.velocity.x<normalSpeed*.8f,
+            "Slow walking uses the same real force controller at a lower movement speed");
+        yield return new WaitForSeconds(.3f);
+        Vector2 mapPoint=game.hud.minimap.MapPosition(game.player.Body.position);
+        yield return null;
+        Check(Vector2.Distance(mapPoint,game.hud.minimap.playerMarker.anchoredPosition)<2,"Minimap highlights the actual player position");
+        ClearFixtures(); yield return null;
+        Vector2 zone=EmptyArea();
+        var mass=Fixture(game.worldGenerator.rockPrefab,zone); mass.baseMass=1.2f; mass.ThermalStep(0);
+        game.laws.Add(WorldLaw.ThermalMass); mass.Body.velocity=Vector2.right*10;
+        float momentum=mass.Mass*mass.Body.velocity.x,oldMass=mass.Mass;
+        mass.temperature=130; mass.ThermalStep(0);
+        Check(mass.Mass<oldMass*.5f && mass.Body.velocity.x>20 && Mathf.Abs(momentum-mass.Mass*mass.Body.velocity.x)<.002f,"Heating a moving rock preserves momentum and visibly accelerates below the new speed cap");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        float neutralDamage=0,hotDamage=0;
+        for(int n=0;n<2;n++)
+        {
+            zone=EmptyArea();
+            var victim=Fixture(game.guardPrefab,zone+Vector2.right*2);
+            var rock=Fixture(game.worldGenerator.rockPrefab,zone); rock.baseMass=1.2f;
+            if(n==1) { game.laws.Add(WorldLaw.ThermalMass); rock.temperature=130; }
+            rock.ThermalStep(0);
+            game.player.ResetAt(zone-Vector2.right*1.1f); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+            float hp=victim.health; mage.Melee(Vector2.right);
+            yield return new WaitForSeconds(.32f);
+            float damage=victim==null ? hp : hp-victim.health;
+            if(n==0) neutralDamage=damage; else hotDamage=damage;
+            ClearFixtures(); game.laws.Clear(); yield return null;
+        }
+        Measure("neutral rock collision damage",neutralDamage); Measure("hot rock collision damage",hotDamage);
+        Check(neutralDamage>25 && hotDamage>=neutralDamage*2,"Same staff impulse: heated rock inflicts at least twice the real collision damage");
+        zone=EmptyArea();
+        var cold=Fixture(game.worldGenerator.rockPrefab,new Vector2(34.5f,zone.y)); cold.temperature=-100; cold.ThermalStep(0);
+        game.laws.Add(WorldLaw.ColdBounce); cold.ThermalStep(0); cold.Body.velocity=Vector2.right*6;
+        yield return new WaitForSeconds(.25f);
+        Check(cold!=null && cold.Body.velocity.x<-.5f,"Cold rock physically rebounds from a thermal static boundary");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        zone=EmptyArea();
+        var wallVictim=Fixture(game.lightEnemyPrefab,new Vector2(34.5f,zone.y)); float wallHp=wallVictim.health; wallVictim.Body.velocity=Vector2.right*8;
+        yield return new WaitForSeconds(.2f);
+        Check(wallVictim==null || wallVictim.health<wallHp-5,"Launching a creature into a static wall inflicts environmental damage");
+        ClearFixtures(); yield return null;
+        report.stage="original obstacle roles and enemy anticipation";
+        for(int n=0;n<2;n++)
+        {
+            zone=EmptyArea();
+            var obstacle=Fixture(n==0 ? game.worldGenerator.largeRockPrefab : game.worldGenerator.treePrefab,zone+Vector2.right*2.4f);
+            Vector2 fixedPosition=obstacle.Body.position; float obstacleHp=obstacle.health;
+            var stone=Fixture(game.worldGenerator.rockPrefab,zone); stone.baseMass=.9f; stone.ThermalStep(0);
+            game.player.ResetAt(zone-Vector2.right*1.1f); mage.ResetTools(); mage.VerificationMove=Vector2.zero; mage.Melee(Vector2.right);
+            yield return new WaitForSeconds(.35f);
+            if(n==0) Check(obstacle!=null && !obstacle.Dead && obstacle.health==obstacleHp && obstacle.Body.position==fixedPosition,
+                "A real launched stone cannot destroy or move a giant obstacle");
+            else Check(obstacle==null || obstacle.Dead,"The same real launched stone can destroy a fixed tree obstacle");
+            ClearFixtures(); yield return null;
+        }
+        zone=EmptyArea();
+        var attacker=Fixture(game.lightEnemyPrefab,zone); var attackerAI=attacker.GetComponent<EnemyBrain>();
+        game.player.ResetAt(zone-Vector2.right*3.2f); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        attackerAI.enabled=true; attackerAI.SetHome(zone,false);
+        float waitingUntil=Time.time+4;
+        while(!attackerAI.IsWindingUp && Time.time<waitingUntil) yield return null;
+        Check(attackerAI.IsWindingUp && attackerAI.Lunges==0,"Ordinary enemy shows anticipation before its first collision attack");
+        Vector2 lockedDirection=attackerAI.AttackDirection; float initialScaleY=attacker.visual.transform.localScale.y;
+        mage.VerificationMove=Vector2.up; yield return new WaitForSeconds(.45f); mage.VerificationMove=Vector2.zero;
+        Check(attackerAI.IsWindingUp && attackerAI.AttackDirection==lockedDirection && attacker.visual.transform.localScale.y<initialScaleY,
+            "Anticipation visibly compresses the enemy and locks direction while the player sidesteps");
+        yield return new WaitForSeconds(.55f);
+        Check(attackerAI.Lunges==1,"The telegraphed attack releases an actual physics lunge");
+        ClearFixtures(); yield return null;
+        zone=EmptyArea(); attacker=Fixture(game.guardPrefab,zone); attacker.isElite=true;
+        attackerAI=attacker.GetComponent<EnemyBrain>(); attackerAI.enabled=true; attackerAI.SetHome(zone,true);
+        game.player.ResetAt(zone-Vector2.right*3.2f); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        float stillHealth=game.player.health; waitingUntil=Time.time+5;
+        while(!attackerAI.IsWindingUp && Time.time<waitingUntil) yield return null;
+        Check(attackerAI.IsWindingUp && game.player.health==stillHealth,"Heavy guard approaches its physical reach before a visible windup");
+        yield return new WaitForSeconds(1.4f);
+        Check(attackerAI.Lunges==1 && game.player.health<stillHealth,"A heavy guard's telegraphed lunge actually reaches a stationary player and retains collision damage");
+        ClearFixtures(); yield return null;
+        report.stage="water, ice, steam and shore reactions";
+        var wet=game.terrain.Where(t=>!t.rough).OrderBy(t=>Vector2.Distance(t.transform.position,game.SpawnPosition)).First();
+        Vector2 waterPos=wet.transform.position;
+        Vector2 shore=game.worldGenerator.SafeDryPosition(waterPos,1);
+        game.player.ResetAt(shore); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        mage.Cast(false,waterPos-shore); yield return new WaitForSeconds(1.6f);
+        var frozen=game.terrain.FirstOrDefault(t=>!t.rough && t.phase==FloorPhase.Ice);
+        Check(frozen!=null,"A real frost projectile freezes generated water into a bridge");
+        if(frozen!=null)
+        {
+            var victim=Fixture(game.lightEnemyPrefab,frozen.transform.position); float hp=victim.health;
+            frozen.AddHeat(170); yield return new WaitForSeconds(.1f);
+            Check(victim==null || victim.Dead,"Melting occupied ice performs a terrain kill");
+        }
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        wet=game.terrain.First(t=>!t.rough &&
+            (game.FloorAt((Vector2)t.transform.position+Vector2.right)==null || game.FloorAt((Vector2)t.transform.position+Vector2.right).rough)
+            && Physics2D.CircleCast((Vector2)t.transform.position+Vector2.right*.88f,.36f,Vector2.right,3,(1<<8)|(1<<10)|(1<<12)).collider==null);
+        wet.temperature=20; wet.Refresh(); Vector2 wetCenter=wet.transform.position;
+        var edge=Fixture(game.worldGenerator.rockPrefab,wetCenter+Vector2.right*.88f); edge.temperature=140;
+        game.laws.Add(WorldLaw.VaporRecoil); int vapor=game.metrics.vaporBursts;
+        yield return new WaitForSeconds(.1f);
+        Check(game.metrics.vaporBursts>vapor && edge!=null && edge.temperature<80 && edge.Body.velocity.x>1,"Vapor recoil triggers at the actual water edge, without placing the center inside water");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        game.laws.Add(WorldLaw.VaporRecoil); game.laws.Add(WorldLaw.Fission);
+        var smallShot=Fixture(game.projectilePrefab,wetCenter+Vector2.right*.88f); smallShot.shotHeat=0;
+        yield return new WaitForSeconds(.25f); smallShot.temperature=140;
+        int tinyExplosions=game.metrics.explosions;
+        yield return new WaitForFixedUpdate();
+        Check(smallShot!=null && smallShot.Body.velocity.magnitude<=game.tuning.spellSpeedLimit+.1f,
+            "Vapor recoil applies the spell speed limit immediately, before its next physics contact");
+        yield return new WaitForSeconds(.18f);
+        Check(game.metrics.explosions==tinyExplosions,"A tiny spell remains below fission energy after vapor recoil");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        wet.temperature=150; wet.Refresh();
+        var steamShot=Fixture(game.projectilePrefab,wet.transform.position); steamShot.shotHeat=0; steamShot.Body.velocity=Vector2.up*6;
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+        Check(steamShot!=null && steamShot.Body.velocity.magnitude<3.1f && steamShot.Body.velocity.magnitude>2.8f,"Entering steam halves projectile speed once");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        report.stage="independent and combined variable laws";
+        zone=EmptyArea();
+        var a=Fixture(game.worldGenerator.rockPrefab,zone); var b=Fixture(game.guardPrefab,zone+Vector2.right*1.7f);
+        a.temperature=150; b.temperature=-120; a.Body.velocity=Vector2.right*4; game.laws.Add(WorldLaw.ThermalArc); int arcs=game.metrics.arcs; float arcHp=b.health;
+        yield return new WaitForSeconds(.4f);
+        Check(game.metrics.arcs>arcs && (b==null || b.health<arcHp-20),"Hot/cold physical contact releases material-sized lightning damage");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        for(int n=0;n<2;n++)
+        {
+            zone=EmptyArea(); a=Fixture(game.worldGenerator.rockPrefab,zone);
+            a.temperature=n==0 ? -120 : 140; a.ThermalStep(0); game.laws.Add(WorldLaw.ThermalArc);
+            game.player.ResetAt(zone-Vector2.right*2.4f); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+            mage.Cast(n==0,Vector2.right); yield return new WaitForSeconds(.6f);
+            Check(a!=null && (n==0 ? a.temperature>-40 : a.temperature<60),
+                n==0 ? "Fire still delivers heat after lightning contact equalization" : "Frost still cools matter after lightning contact equalization");
+            ClearFixtures(); game.laws.Clear(); yield return null;
+        }
+        zone=EmptyArea();
+        a=Fixture(game.worldGenerator.rockPrefab,new Vector2(34.5f,zone.y)); a.Body.velocity=Vector2.right*8; game.laws.Add(WorldLaw.ImpactHeat);
+        yield return new WaitForSeconds(.2f);
+        Check(a!=null && a.temperature>25,"Actual wall collision converts kinetic energy into heat");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        var rough=RoughLane();
+        a=Fixture(game.worldGenerator.rockPrefab,rough.transform.position); a.temperature=60; a.Body.velocity=Vector2.right*8; game.laws.Add(WorldLaw.Abrasion); float abrasionTemp=a.temperature;
+        yield return new WaitForSeconds(.18f);
+        Check(a!=null && a.massRemaining<.99f && a.temperature>abrasionTemp,"Abrasion alone heats rough-ground sliding and removes mass");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        zone=EmptyArea();
+        a=Fixture(game.worldGenerator.largeRockPrefab,zone); a.temperature=-130; a.ThermalStep(0);
+        b=Fixture(game.lightEnemyPrefab,zone+Vector2.right*3); b.temperature=130; game.laws.Add(WorldLaw.Gravity);
+        yield return new WaitForSeconds(.35f);
+        Check(b!=null && b.Body.velocity.x<-.1f,"Cold heavy matter attracts a nearby hot light creature");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        zone=EmptyArea();
+        a=Fixture(game.worldGenerator.rockPrefab,zone); a.temperature=-100; game.laws.Add(WorldLaw.SuperSlide);
+        yield return new WaitForSeconds(.04f);
+        Check(a.Body.drag<game.tuning.normalRockDrag*.11f,"Extreme cold sliding reduces drag to ten percent");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        zone=EmptyArea(); a=Fixture(game.worldGenerator.rockPrefab,zone); a.baseMass=.22f; a.ThermalStep(0);
+        b=Fixture(game.guardPrefab,zone+Vector2.right*5); float blastHp=b.health;
+        game.player.ResetAt(zone-Vector2.right*1.1f); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        game.laws.Add(WorldLaw.Fission); int explosions=game.metrics.explosions;
+        yield return new WaitForSeconds(.25f); mage.Melee(Vector2.right); yield return new WaitForSeconds(.12f);
+        Check(game.metrics.explosions>explosions && (a==null || a.Dead) && (b==null || b.health<blastHp),"Fission works independently: a staff-launched micro rock explodes and damages matter");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        report.stage="cardinal shield movement and interception";
+        zone=EmptyArea(); game.player.ResetAt(zone); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        var enclosed=Fixture(game.guardPrefab,zone+Vector2.right*1.1f);
+        mage.Shield(); yield return new WaitForFixedUpdate();
+        Check(enclosed.Body.velocity.x>5 && !game.bodies.Any(s=>s!=null && s.kind==BodyKind.Shield && s.owner==game.player),
+            "Shield casts first repel a nearby enemy with real force before any enclosing walls appear");
+        yield return new WaitForSeconds(game.tuning.shieldFormationDelay+.08f);
+        Check(Vector2.Distance(enclosed.Body.position,game.player.Body.position)>game.tuning.shieldRadius+enclosed.radius+.05f
+            && game.bodies.Count(s=>s!=null && s.kind==BodyKind.Shield && s.owner==game.player)==4,
+            "Repelled enemy exits the enclosure before the four cardinal shields finish forming");
+        ClearFixtures(); yield return null;
+        zone=EmptyArea(); game.player.ResetAt(zone); mage.ResetTools(); mage.VerificationMove=Vector2.zero; mage.Shield();
+        yield return new WaitForSeconds(game.tuning.shieldFormationDelay+.06f);
+        var shields=game.bodies.Where(x=>x!=null && x.kind==BodyKind.Shield && x.owner==game.player).ToArray();
+        Check(shields.Length==4,"Shield spell creates four physical cardinal shields");
+        mage.VerificationMove=Vector2.right; yield return new WaitForSeconds(.45f); mage.VerificationMove=Vector2.zero;
+        Check(shields.All(s=>s!=null && Vector2.Distance(s.Body.position-game.player.Body.position,s.GetComponent<ShieldFollower>().offset)<.2f),"All four shields follow movement without orbiting");
+        game.player.Body.velocity=Vector2.zero;
+        a=Fixture(game.lightEnemyPrefab,game.player.Body.position+Vector2.right*4);
+        float shieldHp=game.player.health; game.Shoot(a,Vector2.left,105);
+        yield return new WaitForSeconds(.6f);
+        Check(game.player.health>shieldHp-.2f && shields.Any(s=>s!=null && s.health<s.maxHealth),"A following shield intercepts a real hostile projectile");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        zone=EmptyArea(); game.player.ResetAt(zone); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        var returning=Fixture(game.worldGenerator.rockPrefab,zone+Vector2.right*1.55f);
+        mage.Shield(); yield return new WaitForSeconds(game.tuning.shieldFormationDelay+.04f);
+        mage.Melee(Vector2.right); yield return new WaitForSeconds(.12f);
+        var rightShield=game.bodies.FirstOrDefault(s=>s!=null && s.kind==BodyKind.Shield && s.owner==game.player && s.GetComponent<ShieldFollower>().offset.x>0);
+        Check(returning!=null && rightShield!=null && !Physics2D.GetIgnoreCollision(returning.GetComponent<Collider2D>(),rightShield.GetComponent<Collider2D>()),
+            "Own pushed rock can leave the shields, then shield collision is restored");
+        shieldHp=game.player.health; returning.Body.velocity=Vector2.left*8;
+        yield return new WaitForSeconds(.4f);
+        Check(game.player.health>shieldHp-.2f && rightShield!=null && rightShield.health<rightShield.maxHealth,
+            "A returning own rock is physically intercepted by the shield instead of permanently passing through it");
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        report.stage="direct spell damage negative controls";
+        zone=EmptyArea(); var directGuard=Fixture(game.guardPrefab,zone+Vector2.right*2.4f);
+        game.player.ResetAt(zone); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        float startHp=directGuard.health,start=Time.time; Time.timeScale=4;
+        while(Time.time-start<30)
+        {
+            mage.Cast(true,directGuard.Body.position-game.player.Body.position);
+            yield return null;
+        }
+        Check(!directGuard.Dead && directGuard.health>startHp*.9f,"Thirty seconds of direct fire cannot defeat an elite");
+        Measure("guard health lost to 30s fire",startHp-directGuard.health);
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        zone=EmptyArea(); var directBoss=Fixture(game.bossPrefab,zone+Vector2.right*2.3f);
+        game.player.ResetAt(zone); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        foreach(WorldLaw law in Enum.GetValues(typeof(WorldLaw))) if(law!=WorldLaw.ThermalShock) game.laws.Add(law);
+        startHp=directBoss.health; start=Time.time;
+        while(Time.time-start<90 && !directBoss.Dead && !game.player.Dead)
+        {
+            mage.Cast(Mathf.FloorToInt((Time.time-start)/.65f)%2==0,directBoss.Body.position-game.player.Body.position);
+            yield return null;
+        }
+        Time.timeScale=1;
+        float loss=directBoss==null ? startHp : startHp-directBoss.health;
+        Check(directBoss!=null && !directBoss.Dead && loss<=startHp*.1f,"Direct spells remain weak when the explicit rapid-heating brittleness law is excluded");
+        Measure("boss health lost to direct spells excluding brittleness",loss);
+        ClearFixtures(); game.laws.Clear(); yield return null;
+        report.stage="fragment and seven-choice state fixtures";
+        game.player.ResetAt(Vector2.zero); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+        Check(!game.TryOpenClock(),"Clock cannot upgrade before both fragments are picked up");
+        Vector2 originalSpawn=game.SpawnPosition; int oldSeed=game.worldGenerator.Layout.seed;
+        for(int world=1;world<=7;world++)
+        {
+            SuspendEnemies();
+            var guards=game.bodies.Where(x=>x!=null && !x.Dead && x.isElite).ToArray();
+            if(world==1) guards[0].Body.position=game.terrain.First(t=>!t.rough).transform.position;
+            foreach(var guard in guards) guard.Die("State fixture guard death",DamageKind.Terrain);
+            yield return new WaitForSeconds(.08f);
+            Check(game.Fragments==0 && game.shards.Count==2,"World "+world+": guard deaths drop fragments without automatically granting them");
+            foreach(var s in game.shards.ToArray())
+            {
+                Check(game.worldGenerator.Layout.IsDry(s.transform.position),"World "+world+": fragment drop is on reachable dry ground");
+                game.player.Body.position=s.transform.position; game.player.Body.velocity=Vector2.zero; yield return new WaitForSeconds(.05f);
+            }
+            game.player.ResetAt(Vector2.zero); mage.ResetTools(); mage.VerificationMove=Vector2.zero;
+            Check(game.Fragments==2 && game.TryOpenClock(),"World "+world+": collecting both fragments opens the nearby clock");
+            Check(game.Choices.Length==3 && game.Choices.Distinct().Count()==3 && game.Choices.All(l=>!game.Has(l)),"World "+world+": three random distinct unchosen laws are offered");
+            yield return new WaitForSecondsRealtime(.15f);
+            Check(Click(game.hud.choiceButtons[world%3]),"World "+world+": actual UI card click chooses a global law");
+            Check(game.Message=="世界法则改变了","World "+world+": exact world-change message is shown");
+            yield return new WaitForSecondsRealtime(1.45f);
+            Check(game.laws.Count==world && game.World==world+1 && game.worldGenerator.Layout.seed!=oldSeed && game.SpawnPosition==originalSpawn
+                && Vector2.Distance(game.player.Body.position,originalSpawn)<.3f && game.player.health==game.player.maxHealth,"World "+world+": map refresh retains laws and returns the restored player to the same spawn");
+            oldSeed=game.worldGenerator.Layout.seed;
+        }
+        Check(game.State==RunState.Boss && game.GuardsRemaining==0 && game.bodies.Any(x=>x!=null && x.kind==BodyKind.Boss && Vector2.Distance(x.Body.position,game.clock.position)<2),"Eighth world spawns the final boss at the clock");
+        game.player.Die("State fixture death"); yield return new WaitForSecondsRealtime(.2f);
+        Check(Click(game.hud.restartButton),"Defeat restart button is raycastable");
+        yield return new WaitForSeconds(.1f);
+        Check(game.World==1 && game.laws.Count==0 && game.Fragments==0 && game.metrics.upgrades==0 && !game.player.Dead,"Death restart clears the whole run, not only the current world");
+        Check(game.feedbackFont.atlasPopulationMode==TMPro.AtlasPopulationMode.Static && !game.hud.cardBodies.Any(x=>x.enableAutoSizing),"Chinese UI uses a baked static font and fixed runtime text sizes");
+        report.status=report.failed.Count==0 ? "passed" : "failed"; report.stage="complete"; Save(); Time.timeScale=1;
+    }
+    void Update()
+    {
+        if(!bot) return;
+        if(game.State==RunState.Defeat || Time.realtimeSinceStartup>deadline)
+        {
+            report.failed.Add(game.State==RunState.Defeat ? "Player died in world "+game.World+": "+game.DeathCause : "Full run timed out");
+            FinishBot(false); return;
+        }
+        if(game.State==RunState.Victory)
+        {
+            Check(game.World==8 && game.metrics.upgrades==7 && game.metrics.collectedFragments==14,"Natural eight-world run completed seven upgrades and fourteen real fragment pickups");
+            Check(game.metrics.EnvironmentShare>=.8f,"At least eighty percent of enemy HP loss came from environment and laws");
+            FinishBot(report.failed.Count==0); return;
+        }
+        if(game.State==RunState.Upgrade)
+        {
+            mage.VerificationMove=Vector2.zero;
+            int slot=0;
+            // Different build preferences consume the same truly random three-card pool.
+            WorldLaw[][] priorities={
+                new[]{WorldLaw.ThermalMass,WorldLaw.ThermalArc,WorldLaw.ImpactHeat,WorldLaw.Abrasion,WorldLaw.Fission,WorldLaw.ColdBounce,WorldLaw.SuperSlide,WorldLaw.VaporRecoil,WorldLaw.Gravity},
+                new[]{WorldLaw.ColdBounce,WorldLaw.SuperSlide,WorldLaw.VaporRecoil,WorldLaw.Gravity,WorldLaw.ThermalMass,WorldLaw.ImpactHeat,WorldLaw.Abrasion,WorldLaw.Fission,WorldLaw.ThermalArc},
+                new[]{WorldLaw.Abrasion,WorldLaw.Fission,WorldLaw.ImpactHeat,WorldLaw.ThermalArc,WorldLaw.ThermalMass,WorldLaw.Gravity,WorldLaw.VaporRecoil,WorldLaw.SuperSlide,WorldLaw.ColdBounce}
+            };
+            foreach(var law in priorities[preference%3]) { int index=Array.IndexOf(game.Choices,law); if(index>=0) { slot=index; break; } }
+            string name=game.Choices[slot].ToString();
+            if(Click(game.hud.choiceButtons[slot])) { report.chosenLaws.Add(name); selectedRock=null; routeAt=0; report.passed.Add("Actual clock choice in world "+game.World); Save(); }
+            return;
+        }
+        if(!game.SimulationActive) { mage.VerificationMove=Vector2.zero; return; }
+        Time.timeScale=simulationSpeed;
+        mage.VerificationSlowWalk=game.Has(WorldLaw.Abrasion);
+        CoolSelf();
+        report.world=game.World; report.upgrades=game.metrics.upgrades; report.kills=game.metrics.kills; report.playerHealth=game.player.health;
+        report.elapsed=Time.time-botStart; report.environmentShare=game.metrics.EnvironmentShare;
+        if(Time.time>saveAt) { saveAt=Time.time+4; Save(); }
+        if(game.shards.Count>0)
+        {
+            var shard=game.shards.Where(x=>x!=null).OrderBy(x=>Vector2.Distance(x.transform.position,game.player.Body.position)).FirstOrDefault();
+            if(shard!=null) { report.stage="World "+game.World+" picking up fragment"; Navigate(shard.transform.position,.7f); return; }
+        }
+        if(game.Fragments>=2)
+        {
+            report.stage="World "+game.World+" returning to clock";
+            if(Navigate(game.clock.position,1.6f)) game.TryOpenClock();
+            return;
+        }
+        var target=game.bodies.Where(b=>b!=null && !b.Dead && (game.State==RunState.Boss ? b.kind==BodyKind.Boss : b.isElite))
+            .OrderBy(b=>Vector2.Distance(b.Body.position,game.player.Body.position)).FirstOrDefault();
+        if(target==null) { mage.VerificationMove=Vector2.zero; return; }
+        report.stage="World "+game.World+" environment combat";
+        var winding=game.bodies.Where(x=>x!=null && x.IsEnemy && !x.Dead && Vector2.Distance(x.Body.position,game.player.Body.position)<5)
+            .Select(x=>x.GetComponent<EnemyBrain>()).FirstOrDefault(ai=>ai!=null && ai.IsWindingUp);
+        if(winding!=null)
+        {
+            Vector2 side=new Vector2(-winding.AttackDirection.y,winding.AttackDirection.x);
+            Vector2 goal=game.player.Body.position+side*2;
+            if(!ClearWalk(game.player.Body.position,goal)) goal=game.player.Body.position-side*2;
+            Drive(goal); return;
+        }
+        if(game.bodies.Any(x=>x!=null && x.IsEnemy && !x.Dead && Vector2.Distance(x.Body.position,game.player.Body.position)<3)) mage.Shield();
+        if(Time.time<rockWait) { MoveAway(target.Body.position,2.5f); return; }
+        if(selectedRock==null || selectedRock.Dead || selectedRock.Body.velocity.magnitude>4 || selectedRock.health<5)
+        {
+            selectedRock=game.worldGenerator.props.Where(b=>b!=null && !b.Dead && !b.indestructible && b.kind==BodyKind.Rock && b.baseMass>=.85f
+                && (!game.Has(WorldLaw.Fission) || !game.Has(WorldLaw.ThermalMass) || b.baseMass>=1.15f) && b.Body.velocity.magnitude<4)
+                .Where(b=>CanStandBehind(b,target))
+                .OrderBy(b=>Vector2.Distance(b.Body.position,target.Body.position)*1.4f+Vector2.Distance(b.Body.position,game.player.Body.position)).FirstOrDefault();
+            routeAt=0;
+        }
+        if(selectedRock==null) { MoveAway(target.Body.position,4); return; }
+        Vector2 direction=(target.Body.position-selectedRock.Body.position).normalized;
+        if(!CanStandBehind(selectedRock,target)) { selectedRock=null; routeAt=0; return; }
+        Vector2 standing=selectedRock.Body.position-direction*(selectedRock.radius+(NeedsPreparation(selectedRock) ? 2 : .8f));
+        if(!Navigate(standing,.32f)) return;
+        Vector2 towardRock=selectedRock.Body.position-game.player.Body.position;
+        if(Vector2.Dot(towardRock.normalized,direction)<.86f) { routeAt=0; return; }
+        if(game.Has(WorldLaw.ThermalMass) && selectedRock.temperature<90)
+        {
+            mage.Cast(true,towardRock); return;
+        }
+        if(!game.Has(WorldLaw.ThermalMass) && (game.Has(WorldLaw.ColdBounce) || game.Has(WorldLaw.SuperSlide)) && selectedRock.temperature>-60)
+        {
+            mage.Cast(false,towardRock); return;
+        }
+        if(mage.Melee(towardRock) && mage.LastMeleeTarget==selectedRock)
+        {
+            report.staffHits++; rockWait=Time.time+.75f; selectedRock=null; routeAt=0;
+        }
+    }
+    void FinishBot(bool passed)
+    {
+        bot=false; mage.VerificationMove=Vector2.zero; Time.timeScale=1;
+        mage.VerificationSlowWalk=null;
+        report.world=game.World; report.upgrades=game.metrics.upgrades; report.kills=game.metrics.kills;
+        report.playerHealth=game.player.health; report.elapsed=Time.time-botStart; report.environmentShare=game.metrics.EnvironmentShare;
+        report.status=passed ? "passed" : "failed"; report.stage="complete"; Save();
+    }
+    bool CanStandBehind(ThermoBody rock,ThermoBody target)
+    {
+        Vector2 direction=(target.Body.position-rock.Body.position).normalized;
+        Vector2 standing=rock.Body.position-direction*(rock.radius+.8f);
+        if(!CanStandAt(standing,rock)) return false;
+        return !NeedsPreparation(rock) || CanStandAt(rock.Body.position-direction*(rock.radius+2),rock);
+    }
+    bool NeedsPreparation(ThermoBody rock)
+    {
+        return game.Has(WorldLaw.ThermalMass) ? rock.temperature<90
+            : (game.Has(WorldLaw.ColdBounce) || game.Has(WorldLaw.SuperSlide)) && rock.temperature>-60;
+    }
+    bool CanStandAt(Vector2 standing,ThermoBody rock)
+    {
+        if(!game.worldGenerator.Layout.IsReachable(standing)) return false;
+        return !Physics2D.OverlapCircleAll(standing,game.player.radius+.06f,(1<<8)|(1<<10)|(1<<12))
+            .Any(c=>c.GetComponent<ThermoBody>()!=game.player && c.GetComponent<ThermoBody>()!=rock &&
+                (c.GetComponent<ThermoBody>()==null || c.GetComponent<ThermoBody>().owner!=game.player));
+    }
+    void CoolSelf()
+    {
+        if(!game.Has(WorldLaw.Abrasion) || game.player.temperature<=65 || Time.time<mage.IceReady) return;
+        var receiver=game.bodies.Where(b=>b!=null && b!=game.player && !b.Dead && b.kind!=BodyKind.Projectile && b.kind!=BodyKind.Shield
+            && Vector2.Distance(b.GetComponent<Collider2D>().ClosestPoint(game.player.Body.position),game.player.Body.position)<1.4f)
+            .OrderBy(b=>Vector2.Distance(b.Body.position,game.player.Body.position)).FirstOrDefault();
+        if(receiver!=null) mage.Cast(false,receiver.Body.position-game.player.Body.position);
+    }
+    void MoveAway(Vector2 enemy,float distance)
+    {
+        Vector2 delta=game.player.Body.position-enemy;
+        Vector2 goal=delta.magnitude<distance ? game.player.Body.position+delta.normalized*2 : game.player.Body.position;
+        Drive(goal);
+    }
+    bool Navigate(Vector2 goal,float tolerance)
+    {
+        Vector2 position=game.player.Body.position;
+        if(Vector2.Distance(position,goal)<tolerance)
+        {
+            mage.VerificationMove=Vector2.zero; return true;
+        }
+        if(Time.time>routeAt || Vector2.Distance(goal,routeGoal)>1 || route.Count==0)
+        {
+            routeAt=Time.time+3; routeGoal=goal; BuildRoute(position,goal);
+        }
+        while(waypoint<route.Count && Vector2.Distance(position,route[waypoint])<.55f) waypoint++;
+        while(waypoint+1<route.Count && Vector2.Distance(position,route[waypoint+1])<3
+            && ClearWalk(position,route[waypoint+1])) waypoint++;
+        Vector2 waypointPosition=waypoint<route.Count ? route[waypoint] : goal;
+        if(Vector2.Distance(position,lastPosition)>.4f) { lastPosition=position; stuckAt=Time.time; }
+        if(Time.time-stuckAt>2)
+        {
+            var cast=WalkHits(position,waypointPosition).FirstOrDefault();
+            Vector2 tangent=cast.collider!=null ? new Vector2(-cast.normal.y,cast.normal.x) : new Vector2(-(goal-position).y,(goal-position).x).normalized;
+            waypointPosition=position+tangent*1.5f; routeAt=0;
+            if(Time.time-stuckAt>4) { selectedRock=null; stuckAt=Time.time; }
+        }
+        Drive(waypointPosition); return false;
+    }
+    void Drive(Vector2 point)
+    {
+        Vector2 delta=point-game.player.Body.position;
+        float speed=game.player.topSpeed*(mage.VerificationSlowWalk==true ? .5f : 1);
+        Vector2 desired=Vector2.ClampMagnitude(delta*4,speed);
+        Vector2 force=(desired-game.player.Body.velocity)*game.player.Mass*6+game.player.Body.velocity*game.player.Body.drag*game.player.Mass;
+        float power=game.player.driveForce*(mage.VerificationSlowWalk==true ? .5f : 1);
+        mage.VerificationMove=Vector2.ClampMagnitude(force/Mathf.Max(1,power),1);
+    }
+    IEnumerable<RaycastHit2D> WalkHits(Vector2 from,Vector2 to)
+    {
+        Vector2 delta=to-from;
+        return Physics2D.CircleCastAll(from,game.player.radius+.06f,delta.normalized,delta.magnitude,(1<<8)|(1<<10)|(1<<12))
+            .Where(h=>h.collider!=null && h.collider.GetComponent<ThermoBody>()!=game.player &&
+                (h.collider.GetComponent<ThermoBody>()==null ||
+                (h.collider.GetComponent<ThermoBody>().owner!=game.player && h.collider.GetComponent<ThermoBody>().kind!=BodyKind.Projectile)))
+            .OrderBy(h=>h.distance);
+    }
+    bool ClearWalk(Vector2 from,Vector2 to) { return !WalkHits(from,to).Any(); }
+    void BuildRoute(Vector2 from,Vector2 to)
+    {
+        route.Clear(); waypoint=0; var layout=game.worldGenerator.Layout;
+        var start=layout.Cell(from); var end=layout.Cell(to);
+        if(!layout.IsReachable(to)) end=layout.Cell(game.worldGenerator.SafeDryPosition(to,.5f));
+        if(!layout.IsReachable(from)) start=layout.Cell(game.worldGenerator.SafeDryPosition(from,.5f));
+        var previous=new Dictionary<Vector2Int,Vector2Int>(); var queue=new Queue<Vector2Int>();
+        queue.Enqueue(start); previous[start]=start;
+        Vector2Int[] steps={Vector2Int.up,Vector2Int.down,Vector2Int.left,Vector2Int.right};
+        while(queue.Count>0 && !previous.ContainsKey(end))
+        {
+            var cell=queue.Dequeue();
+            foreach(var d in steps)
+            {
+                var next=cell+d;
+                if(!layout.reachable.Contains(next) || previous.ContainsKey(next)) continue;
+                previous[next]=cell; queue.Enqueue(next);
+            }
+        }
+        if(!previous.ContainsKey(end)) { route.Add(game.worldGenerator.SafeDryPosition(to,.6f)); return; }
+        var reverse=new List<Vector2>(); var current=end;
+        while(current!=start) { reverse.Add(layout.Center(current)); current=previous[current]; }
+        reverse.Reverse(); route.AddRange(reverse); route.Add(to);
+    }
+}
+#endif

@@ -1,0 +1,38 @@
+{
+    "status": "failed",
+    "stage": "complete",
+    "kind": "full-run",
+    "passed": [
+        "Actual clock choice in world 1",
+        "Actual clock choice in world 2",
+        "Actual clock choice in world 3",
+        "Actual clock choice in world 4",
+        "Actual clock choice in world 5",
+        "Actual clock choice in world 6",
+        "Actual clock choice in world 7"
+    ],
+    "failed": [
+        "Player died in world 8: 磨损耗尽"
+    ],
+    "measurements": [],
+    "chosenLaws": [
+        "ThermalMass",
+        "ImpactHeat",
+        "ThermalArc",
+        "Fission",
+        "ColdBounce",
+        "SuperSlide",
+        "Abrasion"
+    ],
+    "seed": 2718,
+    "world": 8,
+    "upgrades": 7,
+    "kills": 24,
+    "layoutChecks": 0,
+    "staffHits": 194,
+    "elapsed": 1525.361572265625,
+    "playerHealth": 0.0,
+    "environmentShare": 0.9991982579231262,
+    "simulationSpeed": 4.0,
+    "naturalCombat": true
+}

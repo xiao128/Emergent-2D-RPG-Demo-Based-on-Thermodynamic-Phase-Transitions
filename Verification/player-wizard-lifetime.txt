@@ -1,0 +1,10 @@
+Live Unity checks: player projectile lifetime and four-way wizard
+Runtime player projectile lifetime: 120 seconds
+After 50 additional player shots: original player shot remains active
+Age boundary fixture: alive at 119.92 seconds, destroyed after 120.03 seconds
+Four source sprites reused: down _0, up _1, left _2, right _3
+Per-direction feet alignment stored in directionalOffsets
+Saved to player prefab and PhaseArenaDemo scene
+Runtime screenshot: Captures/player-new-wizard.png
+Console: no errors or warnings
+Play mode stopped after verification

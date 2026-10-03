@@ -1,0 +1,1 @@
+250 dispersed projectiles; gravity+repulsion; dt=0; 30 ticks. LegacyMeanMs=59.999 NewMeanMs=10.403 NeighborCandidates=9880 speedup=5.77

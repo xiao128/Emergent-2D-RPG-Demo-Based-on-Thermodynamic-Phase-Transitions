@@ -1,0 +1,20 @@
+{
+  "status": "interrupted",
+  "stage": "Editor stopped at user request; batch entry cancelled during handoff",
+  "kind": "full-run",
+  "passed": [],
+  "failed": [],
+  "measurements": [],
+  "chosenLaws": [],
+  "seed": 1618,
+  "world": 1,
+  "upgrades": 0,
+  "kills": 0,
+  "layoutChecks": 0,
+  "staffHits": 0,
+  "elapsed": 1.333251953125,
+  "playerHealth": 180.0,
+  "environmentShare": 0.0,
+  "simulationSpeed": 4.0,
+  "naturalCombat": true
+}

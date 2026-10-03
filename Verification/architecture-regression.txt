@@ -1,0 +1,43 @@
+failures=0
+PASS Retired laws excluded from random catalog
+PASS Updated law catalog includes crowding and steam waves
+PASS World layout remains reachable
+PASS Charge is a visual preview without physical projectile or mana cost
+PASS Charging permits movement through the physical controller
+PASS Mouse release creates charged ball
+PASS Released ball is stationary and charges mana once
+PASS Eight release directions have clearance and can be kicked
+PASS No ball created inside a tight wall/player gap
+PASS Actual enemy-player contact damages the player
+PASS Actual collision causes visible kinetic-energy heating
+MEASURE contactDamage=14.02105 temperatures=74.56842,80.63158
+PASS Heating follows speed squared and ignores contact-impulse magnitude
+PASS Returning own projectile still causes collision damage
+PASS Rock friction heating and mass erosion
+PASS Rock cold body heats before erosion
+PASS Rock cold bounce and superconductive friction
+PASS Rock thermal expansion
+PASS Projectile friction heating and mass erosion
+PASS Projectile cold body heats before erosion
+PASS Projectile cold bounce and superconductive friction
+PASS Projectile thermal expansion
+PASS Enemy friction heating and mass erosion
+PASS Enemy cold body heats before erosion
+PASS Enemy cold bounce and superconductive friction
+PASS Enemy thermal expansion
+PASS Boss friction heating and mass erosion
+PASS Boss cold body heats before erosion
+PASS Boss cold bounce and superconductive friction
+PASS Boss thermal expansion
+PASS Player friction heating and mass erosion
+PASS Player cold body heats before erosion
+PASS Player cold bounce and superconductive friction
+PASS Player thermal expansion
+PASS Rapid cooling emits steam wave without water contact
+PASS Steam wave cooldown prevents recursive wave spam
+PASS Density gravity attracts heavy neutral bodies without old temperature restrictions
+PASS Eight crowded items receive continuous damage
+PASS Shared projectile FIFO removes oldest at 250, preserving second
+PASS Health and mana bars remain horizontal under root rotation
+PASS Mini mana sits beneath mini health
+PASS Mini mana uses real controller mana ratio

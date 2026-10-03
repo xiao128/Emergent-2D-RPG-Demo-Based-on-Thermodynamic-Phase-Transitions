@@ -1,0 +1,21 @@
+{
+    "status": "failed",
+    "stage": "complete",
+    "kind": "mechanics",
+    "passed": [],
+    "failed": [
+        "Player died in world 1: 环境撞击"
+    ],
+    "measurements": [],
+    "chosenLaws": [],
+    "seed": 2718,
+    "world": 1,
+    "upgrades": 0,
+    "kills": 0,
+    "layoutChecks": 0,
+    "staffHits": 1,
+    "elapsed": 34.441307067871097,
+    "playerHealth": 34.77294921875,
+    "environmentShare": 1.0,
+    "naturalCombat": true
+}

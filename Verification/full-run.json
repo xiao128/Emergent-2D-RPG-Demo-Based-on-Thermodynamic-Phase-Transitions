@@ -1,0 +1,21 @@
+{
+    "status": "passed",
+    "stage": "Victory",
+    "passed": [
+        "Clock card clicked after wave 1",
+        "Clock card clicked after wave 2",
+        "Clock card clicked after wave 3",
+        "Natural combat defeats all three waves and the final demon king",
+        "Full run makes three world-clock upgrades",
+        "Full run kills every spawned enemy through gameplay"
+    ],
+    "failed": [],
+    "finishedWave": 4,
+    "upgrades": 3,
+    "kills": 37,
+    "spawned": 37,
+    "playerHealth": 141.10009765625,
+    "elapsed": 64.3959732055664,
+    "worstFrameMs": 70.58651733398438,
+    "naturalCombat": true
+}

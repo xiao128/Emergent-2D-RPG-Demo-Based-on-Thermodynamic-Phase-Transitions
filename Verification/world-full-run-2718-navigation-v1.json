@@ -1,0 +1,25 @@
+{
+    "status": "failed",
+    "stage": "complete",
+    "kind": "mechanics",
+    "passed": [
+        "Actual clock choice in world 1"
+    ],
+    "failed": [
+        "Bot navigation interrupted: repeated grid route rebuilds caused detours before reaching combat"
+    ],
+    "measurements": [],
+    "chosenLaws": [
+        "ThermalMass"
+    ],
+    "seed": 2718,
+    "world": 2,
+    "upgrades": 1,
+    "kills": 5,
+    "layoutChecks": 0,
+    "staffHits": 2,
+    "elapsed": 270.6759033203125,
+    "playerHealth": 79.25503540039063,
+    "environmentShare": 1.0,
+    "naturalCombat": true
+}

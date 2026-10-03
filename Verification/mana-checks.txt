@@ -1,0 +1,10 @@
+Mana verification: live Unity Play mode
+Fire cast: success, cost 10
+Ice cast: success, cost 10
+Cooldown cast: blocked, cost 0
+Insufficient mana at 9: blocked, unchanged projectile count
+Recovery: elapsed 17.77985 s; actual 188.8991; expected 188.8992; error 0.000153
+Recovery cap: 200
+Pause: mana remained 123
+ResetTools: mana reset to 200
+HUD: MP Back / MP Fill / Mana saved in scene; visibly verified in Captures/mana-hud.png

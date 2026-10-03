@@ -1,0 +1,293 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace PhaseArena
+{
+    public enum BodyKind { Player, Enemy, Boss, Rock, Tree, Projectile, Shield, StaticObstacle }
+    public enum WorldLaw { ThermalMass, ColdBounce, SuperSlide, VaporRecoil, ThermalArc, ImpactHeat, Abrasion, Fission, Gravity,
+        Leidenfrost, ThermalShock, DoubleForce, ThermalExpansion, Crowding }
+    [RequireComponent(typeof(Rigidbody2D),typeof(Collider2D))]
+    public class ThermoBody : MonoBehaviour
+    {
+        public BodyKind kind;
+        public float baseMass=1,temperature=20,maxHealth=50,health=50;
+        public float massRemaining=1,radius=.4f,driveForce=20,topSpeed=5;
+        public SpriteRenderer visual,healthFill,heatRing;
+        public Vector2 healthBarSize=new Vector2(.8f,.045f);
+        public ThermoBody owner,lastInteractor;
+        public bool indestructible,isElite;
+        public float lifetime,shotHeat;
+        public bool IsCharging { get; set; }
+        public Color baseColor=Color.white;
+        public Rigidbody2D Body { get; private set; }
+        public Vector2 LastSafePosition { get; set; }
+        public float LastDamageTime { get; private set; }=-100;
+        public DamageKind LastDamageKind { get; private set; }
+        public bool Dead { get; private set; }
+        public bool IsActor => kind==BodyKind.Player || kind==BodyKind.Enemy || kind==BodyKind.Boss;
+        public bool IsEnemy => kind==BodyKind.Enemy || kind==BodyKind.Boss;
+        public float Mass => Body!=null ? Body.mass : baseMass;
+        float age,wetCooldown;
+        float fissionAt=-1;
+        bool steamSlowed;
+        Collider2D bodyCollider;
+        ThermalShape shape;
+        bool shockArmed;
+        float frozenAt,frozenTemperature;
+        public Collider2D Collider => bodyCollider;
+        public float ShapeScale => shape!=null ? shape.SizeFactor : 1;
+        public float Area
+        {
+            get
+            {
+                var col=bodyCollider!=null ? bodyCollider : GetComponent<Collider2D>(); var size=col.bounds.size;
+                if(col is CircleCollider2D) return Mathf.Max(.001f,Mathf.PI*size.x*size.y*.25f);
+                if(col is CapsuleCollider2D)
+                {
+                    float small=Mathf.Min(size.x,size.y),large=Mathf.Max(size.x,size.y);
+                    return Mathf.Max(.001f,small*(large-small)+Mathf.PI*small*small*.25f);
+                }
+                return Mathf.Max(.001f,size.x*size.y);
+            }
+        }
+        public float Density => Mass/Area;
+        public bool IsCrowdingItem => kind==BodyKind.Rock || kind==BodyKind.Projectile || kind==BodyKind.Tree;
+        TrailRenderer trail;
+        readonly HashSet<TerrainCell> visitedTiles=new HashSet<TerrainCell>();
+        void Awake()
+        {
+            Body=GetComponent<Rigidbody2D>(); bodyCollider=GetComponent<Collider2D>();
+            health=maxHealth; LastSafePosition=transform.position; Body.mass=Mathf.Max(.0001f,baseMass);
+            if(Body.bodyType==RigidbodyType2D.Dynamic) Body.collisionDetectionMode=CollisionDetectionMode2D.Continuous;
+        }
+        void OnEnable() { if(ArenaDirector.Instance!=null) ArenaDirector.Instance.Register(this); }
+        void Start()
+        {
+            if(GetComponent<BodyAppearance>()==null) gameObject.AddComponent<BodyAppearance>();
+            if(healthFill!=null && GetComponent<BodyStatusBars>()==null) gameObject.AddComponent<BodyStatusBars>();
+            if(ArenaDirector.Instance!=null) ArenaDirector.Instance.Register(this);
+            if((kind==BodyKind.Rock || kind==BodyKind.Projectile) && Body.bodyType==RigidbodyType2D.Dynamic)
+            {
+                trail=gameObject.AddComponent<TrailRenderer>(); trail.sharedMaterial=visual.sharedMaterial;
+                trail.time=.28f; trail.startWidth=.1f; trail.endWidth=0; trail.minVertexDistance=.12f;
+                trail.startColor=new Color(.95f,.82f,.5f,.6f); trail.endColor=Color.clear; trail.sortingOrder=480; trail.emitting=false;
+            }
+        }
+        void OnDisable() { if(ArenaDirector.Instance!=null) ArenaDirector.Instance.Unregister(this); }
+        public float SpeedLimit
+        {
+            get
+            {
+                var t=ArenaDirector.Instance!=null ? ArenaDirector.Instance.tuning : null;
+                return IsActor ? (t!=null ? t.actorSpeedLimit : 60) : (t!=null ? t.rockSpeedLimit : 240);
+            }
+        }
+        public void ResetAt(Vector2 position)
+        {
+            if(shape!=null) shape.Restore();
+            shockArmed=false;
+            Dead=false; health=maxHealth; temperature=20; massRemaining=1; age=0; wetCooldown=0; LastDamageTime=-100; fissionAt=-1;
+            bodyCollider.enabled=true; Body.position=position; Body.velocity=Vector2.zero; Body.angularVelocity=0; Body.mass=baseMass; LastSafePosition=position;
+            visitedTiles.Clear(); ThermalStep(0);
+        }
+        void FixedUpdate()
+        {
+            var world=ArenaDirector.Instance;
+            if(world==null || world.tuning==null || Dead || IsCharging || !world.SimulationActive) return;
+            var t=world.tuning; age+=Time.fixedDeltaTime;
+            if(kind!=BodyKind.Projectile && lifetime>0 && age>lifetime) { Destroy(gameObject); return; }
+            if(Body.bodyType!=RigidbodyType2D.Dynamic) return;
+            var floor=world.FloorAt(Body.position);
+            if(kind==BodyKind.Projectile && floor!=null && !floor.rough && visitedTiles.Add(floor))
+            {
+                var old=floor.phase; floor.AddHeat(shotHeat);
+                if(old!=FloorPhase.Ice && floor.phase==FloorPhase.Ice) world.metrics.frozenTiles++;
+            }
+            bool ice=floor!=null && !floor.rough && floor.phase==FloorPhase.Ice;
+            float friction=ice ? t.iceDrag : floor!=null && floor.rough ? (IsActor ? 6 : t.roughRockDrag) : IsActor ? 4.5f : t.normalRockDrag;
+            if(world.Has(WorldLaw.SuperSlide) && temperature<-50) friction*=.05f;
+            Body.drag=friction;
+            Body.velocity=Vector2.ClampMagnitude(Body.velocity,SpeedLimit);
+            if(floor==null || floor.rough) LastSafePosition=Body.position;
+            bool steam=floor!=null && !floor.rough && floor.phase==FloorPhase.Steam;
+            if(steam && !steamSlowed && kind==BodyKind.Projectile) Body.velocity*=.5f;
+            steamSlowed=steam;
+            ApplyGroundFrictionLaws(friction,ice,Time.fixedDeltaTime);
+            if(Dead) return;
+            float kinetic=.5f*Mass*Body.velocity.sqrMagnitude;
+            if(world.Has(WorldLaw.Fission) && QualifiesForFission(Body.velocity.magnitude))
+            {
+                if(fissionAt<0) fissionAt=Time.time+t.fissionDelay;
+                else if(Time.time>=fissionAt) { world.Fission(this,kinetic); Die("轻小高速爆炸",DamageKind.Fission); }
+            }
+            else fissionAt=-1;
+            if(trail!=null) { trail.enabled=Body.velocity.sqrMagnitude>16; trail.emitting=trail.enabled; trail.startColor=temperature>80 ? new Color(1,.47f,.2f,.65f) : temperature<-40 ? new Color(.4f,.84f,1,.65f) : new Color(.95f,.82f,.5f,.6f); }
+        }
+        // Shared by every dynamic body: actors, rocks and both sides' projectiles.
+        // Cold bodies still heat from friction, but only warm, fast bodies erode.
+        public void ApplyGroundFrictionLaws(float friction,bool ice,float dt)
+        {
+            var world=ArenaDirector.Instance;
+            if(world==null || Dead || IsCharging || !world.SimulationActive || Body.bodyType!=RigidbodyType2D.Dynamic || !world.Has(WorldLaw.Abrasion)) return;
+            var t=world.tuning;
+            if(!ice) AddHeat(Body.velocity.sqrMagnitude*friction*.09f*dt);
+            if(Body.velocity.magnitude<=5 || temperature<=t.ambientTemperature) return;
+            massRemaining*=Mathf.Pow(1-t.abrasionPerMeter,Body.velocity.magnitude*dt);
+            ThermalStep(0);
+            if(massRemaining>=t.minimumMassFraction || indestructible) return;
+            float energy=.5f*Mass*Body.velocity.sqrMagnitude;
+            if(world.Has(WorldLaw.Fission) && energy>=t.fissionMinimumEnergy) world.Fission(this,energy);
+            Die("磨损耗尽",DamageKind.Terrain);
+        }
+        public void ThermalStep(float dt)
+        {
+            var world=ArenaDirector.Instance;
+            if(Dead || IsCharging || world==null || world.tuning==null) return;
+            var t=world.tuning;
+            temperature=Mathf.Clamp(temperature,t.minimumTemperature,t.maximumTemperature);
+            temperature=Mathf.MoveTowards(temperature,t.ambientTemperature,(t.ambientRecovery+Body.velocity.magnitude*t.windRecovery)*dt);
+            TrackThermalShock(); if(Dead) return;
+            if(kind==BodyKind.Tree && temperature>80) { AddHeat(12*dt); Damage(3*dt,"燃烧",DamageKind.Overheat,true); }
+            else if(IsActor && temperature>80) Damage(Mathf.Min(t.overheatDamageLimit,(temperature-80)*.001f)*dt,"过热",DamageKind.Overheat,true);
+            float factor=world.Has(WorldLaw.ThermalMass) ? Mathf.Clamp(1-(temperature-20)*t.massTemperatureSlope,t.hotMassFactor,t.coldMassFactor) : 1;
+            float next=Mathf.Clamp(baseMass*massRemaining*factor,.0001f,80);
+            if(Mathf.Abs(next-Body.mass)>.000001f)
+            {
+                // Temperature changes inertia, but does not change current velocity.
+                Body.mass=next;
+            }
+            var material=world.Has(WorldLaw.ColdBounce) && temperature<-40 ? world.bouncyMaterial : world.normalMaterial;
+            if(bodyCollider.sharedMaterial!=material) bodyCollider.sharedMaterial=material;
+            if(world.Has(WorldLaw.ThermalExpansion) && kind!=BodyKind.StaticObstacle)
+            {
+                if(shape==null) shape=gameObject.AddComponent<ThermalShape>();
+                shape.Step(dt);
+            }
+            else if(shape!=null) shape.Restore();
+        }
+        public bool QualifiesForFission(float speed)
+        {
+            var t=ArenaDirector.Instance!=null ? ArenaDirector.Instance.tuning : null;
+            return t!=null && Body.bodyType==RigidbodyType2D.Dynamic && !indestructible && !Dead && age>.2f
+                && Mass<t.fissionMass && speed>t.fissionSpeed && .5f*Mass*speed*speed>=t.fissionMinimumEnergy;
+        }
+        public void AddHeat(float amount)
+        {
+            var t=ArenaDirector.Instance!=null ? ArenaDirector.Instance.tuning : null;
+            TrackThermalShock();
+            float before=temperature;
+            temperature=Mathf.Clamp(temperature+amount,t!=null ? t.minimumTemperature : -600,t!=null ? t.maximumTemperature : 800);
+            var world=ArenaDirector.Instance;
+            if(world!=null && world.Has(WorldLaw.VaporRecoil) && before>=t.steamHotThreshold && before-temperature>=t.steamCoolingThreshold && Time.time>=wetCooldown)
+            {
+                wetCooldown=Time.time+t.steamWaveCooldown;
+                world.SteamWave(this,before-temperature);
+            }
+            TrackThermalShock();
+        }
+        public void ApplyForce(Vector2 force,ForceMode2D mode=ForceMode2D.Force)
+        {
+            if(Dead || Body.bodyType!=RigidbodyType2D.Dynamic) return;
+            var world=ArenaDirector.Instance;
+            Body.AddForce(force*(world!=null ? world.ForceMultiplier : 1),mode);
+            if(mode==ForceMode2D.Impulse) Body.velocity=Vector2.ClampMagnitude(Body.velocity,SpeedLimit);
+        }
+        void TrackThermalShock()
+        {
+            var world=ArenaDirector.Instance;
+            if(world==null || world.tuning==null || !world.Has(WorldLaw.ThermalShock) || Dead) { shockArmed=false; return; }
+            var t=world.tuning;
+            if(temperature<=t.shockFrozenTemperature)
+            {
+                shockArmed=true; frozenAt=Time.time; frozenTemperature=temperature; return;
+            }
+            if(!shockArmed) return;
+            if(Time.time-frozenAt>t.shockWindow) { shockArmed=false; return; }
+            if(temperature<t.shockHotTemperature) return;
+            shockArmed=false;
+            float damage=Mathf.Min(t.impactDamageCap,(temperature-frozenTemperature)*Mass*t.shockDamagePerDegreeMass);
+            world.metrics.thermalShocks++;
+            world.Feedback(Body.position,"极寒 → 骤热 → 脆性伤害",new Color(.7f,.9f,1));
+            Damage(damage,"极寒脆性",DamageKind.ThermalShock);
+        }
+        public void Damage(float amount,string cause,DamageKind kindOfDamage=DamageKind.Impact,bool continuous=false)
+        {
+            if(Dead || indestructible || amount<=0) return;
+            if(kind==BodyKind.Player && !continuous && Time.time-LastDamageTime<.45f) return;
+            float actual=Mathf.Min(amount,Mathf.Max(health,0));
+            if(ArenaDirector.Instance!=null) ArenaDirector.Instance.RecordDamage(this,actual,kindOfDamage);
+            LastDamageKind=kindOfDamage;
+            if(!continuous) LastDamageTime=Time.time;
+            health-=amount;
+            if(health<=0) Die(cause,kindOfDamage);
+        }
+        public void Die(string cause,DamageKind kindOfDamage=DamageKind.Terrain)
+        {
+            if(Dead) return;
+            if(health>0 && ArenaDirector.Instance!=null) ArenaDirector.Instance.RecordDamage(this,health,kindOfDamage);
+            health=0; Dead=true;
+            if(ArenaDirector.Instance!=null) ArenaDirector.Instance.OnBodyDied(this,cause);
+            if(kind!=BodyKind.Player) Destroy(gameObject);
+            else { Body.velocity=Vector2.zero; bodyCollider.enabled=false; }
+        }
+        public void LayoutTreeIndicators()
+        {
+            if(kind!=BodyKind.Tree || visual==null) return;
+            var collider=GetComponent<Collider2D>();
+            if(collider==null) return;
+            var bounds=collider.bounds;
+            float width=Mathf.Max(.5f,bounds.size.x);
+            float sx=Mathf.Max(.01f,Mathf.Abs(transform.lossyScale.x));
+            float sy=Mathf.Max(.01f,Mathf.Abs(transform.lossyScale.y));
+            healthBarSize=new Vector2(width/sx,.06f/sy);
+            float top=visual.bounds.max.y;
+            if(visual.sprite!=null)
+            {
+                // Tight sprite geometry excludes transparent margins in the texture.
+                top=float.MinValue;
+                foreach(var vertex in visual.sprite.vertices) top=Mathf.Max(top,visual.transform.TransformPoint(vertex).y);
+                if(top==float.MinValue) top=visual.bounds.max.y;
+            }
+            Vector3 center=new Vector3(bounds.center.x,top+.18f,transform.position.z);
+            if(healthFill!=null)
+            {
+                healthFill.transform.parent.position=center-Vector3.right*width*.5f;
+                float ratio=Mathf.Clamp01(health/maxHealth);
+                healthFill.transform.localScale=new Vector3(healthBarSize.x*ratio,healthBarSize.y,1);
+                healthFill.transform.localPosition=new Vector3(healthBarSize.x*.5f*ratio,0,0);
+            }
+            var back=transform.Find("Health Back");
+            if(back!=null) { back.position=center; back.localScale=new Vector3(width/sx,.085f/sy,1); }
+            if(heatRing!=null && heatRing.sprite!=null)
+            {
+                float diameter=Mathf.Max(bounds.size.x,bounds.size.y)*1.15f;
+                heatRing.transform.position=bounds.center;
+                var size=heatRing.sprite.bounds.size;
+                heatRing.transform.localScale=new Vector3(diameter/(sx*Mathf.Max(.01f,size.x)),diameter/(sy*Mathf.Max(.01f,size.y)),1);
+            }
+        }
+        void OnCollisionEnter2D(Collision2D c)
+        {
+            var world=ArenaDirector.Instance; if(world==null || Dead) return;
+            var other=c.collider.GetComponentInParent<ThermoBody>();
+            if(other!=null)
+            {
+                var contact=c.contactCount>0 ? c.GetContact(0) : default(ContactPoint2D);
+                float speed=c.contactCount>0 ? Mathf.Abs(Vector2.Dot(c.relativeVelocity,contact.normal)) : c.relativeVelocity.magnitude;
+                if(kind==BodyKind.Shield || other.kind==BodyKind.Shield)
+                {
+                    // Following a shield is locomotion, not an extra damaging attack.
+                    var shield=kind==BodyKind.Shield ? this : other;
+                    var mover=shield==this ? other : this;
+                    // Use the contact's incoming relative speed, rather than
+                    // the rock's already-stopped velocity after the solver.
+                    // Only the shield callback charges its health once.
+                    if(kind==BodyKind.Shield) shield.Damage(ArenaDirector.ImpactDamage(mover.Mass,speed),"护盾抵挡",DamageKind.Impact);
+                    return;
+                }
+                world.ResolveCollision(this,other,speed,c.contactCount>0 ? contact.point : Body.position,c.contactCount>0 ? contact.normalImpulse : 0);
+            }
+            else world.DeliverProjectileHeat(this,c.contactCount>0 ? c.GetContact(0).point : Body.position);
+        }
+    }
+}

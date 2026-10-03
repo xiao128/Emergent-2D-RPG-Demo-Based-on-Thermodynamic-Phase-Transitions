@@ -1,0 +1,26 @@
+{
+    "status": "failed",
+    "stage": "complete",
+    "kind": "full-run",
+    "passed": [
+        "Actual clock choice in world 1"
+    ],
+    "failed": [
+        "Player died in world 2: 环境撞击"
+    ],
+    "measurements": [],
+    "chosenLaws": [
+        "SuperSlide"
+    ],
+    "seed": 31415,
+    "world": 2,
+    "upgrades": 1,
+    "kills": 8,
+    "layoutChecks": 0,
+    "staffHits": 86,
+    "elapsed": 764.0478515625,
+    "playerHealth": 0.0,
+    "environmentShare": 1.0,
+    "simulationSpeed": 4.0,
+    "naturalCombat": true
+}

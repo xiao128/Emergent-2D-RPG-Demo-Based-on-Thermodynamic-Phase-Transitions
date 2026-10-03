@@ -1,0 +1,25 @@
+{
+    "status": "failed",
+    "stage": "complete",
+    "kind": "full-run",
+    "passed": [
+        "Actual clock choice in world 1"
+    ],
+    "failed": [
+        "Stopped to fix verification navigation: bot repeatedly chose a stone whose standing position was blocked by water"
+    ],
+    "measurements": [],
+    "chosenLaws": [
+        "SuperSlide"
+    ],
+    "seed": 31415,
+    "world": 2,
+    "upgrades": 1,
+    "kills": 3,
+    "layoutChecks": 0,
+    "staffHits": 25,
+    "elapsed": 1362.0194091796875,
+    "playerHealth": 124.57542419433594,
+    "environmentShare": 1.0,
+    "naturalCombat": true
+}

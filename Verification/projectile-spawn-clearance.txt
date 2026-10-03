@@ -1,0 +1,9 @@
+Live Unity checks, 2026-10-02
+Cause: player collider is offset from Rigidbody/root by approximately (0.12, 0.63); the old spawn/collision-restoration calculations used root position and a radius field differing from the actual collider.
+Old upward spawn reproduced player penetration: 0.1427751.
+Fixed: actual collider center and extents; minimum caster/ball clearance; obstacle path rejection when no room; collision restoration by Collider2D.Distance; melee origin aligned with collider.
+Clear release directions: 8/8. Minimum surface gap: 0.1800004.
+F targets newly released ball: 8/8.
+Tight wall prevents spawning and does not consume a projectile slot: passed.
+Own ball collision enabled after safe creation: true.
+Own returning ball at speed 20 caused 54.66667 damage through the existing physical collision formula.

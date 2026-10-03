@@ -1,0 +1,9 @@
+failures=0
+PASS Three ranged roamers replace existing enemies
+PASS Cooling increases mass without changing velocity
+PASS Heating decreases mass without changing velocity
+PASS Projectiles share a colliding body layer
+PASS Actual airborne collision damages both projectiles without hit deletion
+PASS F selects and accelerates a projectile with an actual impulse
+PASS Accelerated projectile hits an enemy through shared physical damage, without the old spell cap; HP=424.506
+PASS Ranged enemy telegraphs and throws the same projectile through Shoot
