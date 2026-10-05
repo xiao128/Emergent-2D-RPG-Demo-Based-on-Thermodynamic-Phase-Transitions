@@ -1,0 +1,1 @@
+Heal=0.2 cold=-10 mass=3 VisibleTooltips=115 Missing=

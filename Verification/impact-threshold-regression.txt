@@ -1,0 +1,4 @@
+failures=0
+PASS Actual player-static-rock contact at speed=6 damage=0 contact=True
+PASS Actual player-static-rock contact at speed=6.2 damage=19.376 contact=True
+PASS Threshold equality causes no damage

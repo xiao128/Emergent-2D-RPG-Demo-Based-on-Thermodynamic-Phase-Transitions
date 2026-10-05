@@ -5,7 +5,7 @@ namespace PhaseArena
 {
     public enum BodyKind { Player, Enemy, Boss, Rock, Tree, Projectile, Shield, StaticObstacle }
     public enum WorldLaw { ThermalMass, ColdBounce, SuperSlide, VaporRecoil, ThermalArc, ImpactHeat, Abrasion, Fission, Gravity,
-        Leidenfrost, ThermalShock, DoubleForce, ThermalExpansion, Crowding }
+        Leidenfrost, ThermalShock, DoubleForce, ThermalExpansion, Crowding, StoneMagic, ExpandedRadiation, ThermalInjury, FrictionHeat }
     [RequireComponent(typeof(Rigidbody2D),typeof(Collider2D))]
     public class ThermoBody : MonoBehaviour
     {
@@ -32,6 +32,11 @@ namespace PhaseArena
         bool steamSlowed;
         Collider2D bodyCollider;
         ThermalShape shape;
+        readonly ThermalInjuryStatus thermalInjury=new ThermalInjuryStatus();
+        readonly CrowdingStatus crowding=new CrowdingStatus();
+        public int CrowdingNeighborCount => crowding.Count;
+        public float NextCrowdingScanAt => crowding.NextScanAt;
+        internal void TickCrowding(float dt) { crowding.Tick(this,ArenaDirector.Instance,dt); }
         bool shockArmed;
         float frozenAt,frozenTemperature;
         public Collider2D Collider => bodyCollider;
@@ -51,6 +56,23 @@ namespace PhaseArena
             }
         }
         public float Density => Mass/Area;
+        public float GroundDrag
+        {
+            get
+            {
+                var world=ArenaDirector.Instance;
+                return world!=null ? GroundDragAt(world.FloorAt(Body.position),world) : Body.drag;
+            }
+        }
+        float GroundDragAt(TerrainCell floor,ArenaDirector world)
+        {
+            var t=world.tuning;
+            bool ice=floor!=null && !floor.rough && floor.phase==FloorPhase.Ice;
+            float drag=ice ? t.iceDrag : floor!=null && floor.rough ? (IsActor ? 6 : t.roughRockDrag) : IsActor ? 4.5f : t.normalRockDrag;
+            if(world.Has(WorldLaw.SuperSlide) && temperature<-50) drag*=.05f;
+            return drag;
+        }
+        // Kept only for the historical benchmark; current crowding counts nearby entities around actors.
         public bool IsCrowdingItem => kind==BodyKind.Rock || kind==BodyKind.Projectile || kind==BodyKind.Tree;
         TrailRenderer trail;
         readonly HashSet<TerrainCell> visitedTiles=new HashSet<TerrainCell>();
@@ -64,6 +86,7 @@ namespace PhaseArena
         void Start()
         {
             if(GetComponent<BodyAppearance>()==null) gameObject.AddComponent<BodyAppearance>();
+            if(IsActor && GetComponent<CrowdingIndicator>()==null) gameObject.AddComponent<CrowdingIndicator>();
             if(healthFill!=null && GetComponent<BodyStatusBars>()==null) gameObject.AddComponent<BodyStatusBars>();
             if(ArenaDirector.Instance!=null) ArenaDirector.Instance.Register(this);
             if((kind==BodyKind.Rock || kind==BodyKind.Projectile) && Body.bodyType==RigidbodyType2D.Dynamic)
@@ -73,7 +96,7 @@ namespace PhaseArena
                 trail.startColor=new Color(.95f,.82f,.5f,.6f); trail.endColor=Color.clear; trail.sortingOrder=480; trail.emitting=false;
             }
         }
-        void OnDisable() { if(ArenaDirector.Instance!=null) ArenaDirector.Instance.Unregister(this); }
+        void OnDisable() { crowding.Reset(); if(ArenaDirector.Instance!=null) ArenaDirector.Instance.Unregister(this); }
         public float SpeedLimit
         {
             get
@@ -84,9 +107,14 @@ namespace PhaseArena
         }
         public void ResetAt(Vector2 position)
         {
+            massRemaining=1;
             if(shape!=null) shape.Restore();
             shockArmed=false;
+            thermalInjury.Reset();
+            crowding.Reset();
             Dead=false; health=maxHealth; temperature=20; massRemaining=1; age=0; wetCooldown=0; LastDamageTime=-100; fissionAt=-1;
+            var guard=GetComponent<PlayerDeathGuard>(); if(guard!=null) guard.ResetProtection();
+            var hitFeedback=GetComponent<PlayerHitFeedback>(); if(hitFeedback!=null) hitFeedback.ResetFeedback();
             bodyCollider.enabled=true; Body.position=position; Body.velocity=Vector2.zero; Body.angularVelocity=0; Body.mass=baseMass; LastSafePosition=position;
             visitedTiles.Clear(); ThermalStep(0);
         }
@@ -104,8 +132,7 @@ namespace PhaseArena
                 if(old!=FloorPhase.Ice && floor.phase==FloorPhase.Ice) world.metrics.frozenTiles++;
             }
             bool ice=floor!=null && !floor.rough && floor.phase==FloorPhase.Ice;
-            float friction=ice ? t.iceDrag : floor!=null && floor.rough ? (IsActor ? 6 : t.roughRockDrag) : IsActor ? 4.5f : t.normalRockDrag;
-            if(world.Has(WorldLaw.SuperSlide) && temperature<-50) friction*=.05f;
+            float friction=GroundDragAt(floor,world);
             Body.drag=friction;
             Body.velocity=Vector2.ClampMagnitude(Body.velocity,SpeedLimit);
             if(floor==null || floor.rough) LastSafePosition=Body.position;
@@ -124,15 +151,15 @@ namespace PhaseArena
             if(trail!=null) { trail.enabled=Body.velocity.sqrMagnitude>16; trail.emitting=trail.enabled; trail.startColor=temperature>80 ? new Color(1,.47f,.2f,.65f) : temperature<-40 ? new Color(.4f,.84f,1,.65f) : new Color(.95f,.82f,.5f,.6f); }
         }
         // Shared by every dynamic body: actors, rocks and both sides' projectiles.
-        // Cold bodies still heat from friction, but only warm, fast bodies erode.
+        // Heating and erosion are independent global laws.
         public void ApplyGroundFrictionLaws(float friction,bool ice,float dt)
         {
             var world=ArenaDirector.Instance;
-            if(world==null || Dead || IsCharging || !world.SimulationActive || Body.bodyType!=RigidbodyType2D.Dynamic || !world.Has(WorldLaw.Abrasion)) return;
+            if(world==null || Dead || IsCharging || !world.SimulationActive || Body.bodyType!=RigidbodyType2D.Dynamic || dt<=0) return;
             var t=world.tuning;
-            if(!ice) AddHeat(Body.velocity.sqrMagnitude*friction*.09f*dt);
-            if(Body.velocity.magnitude<=5 || temperature<=t.ambientTemperature) return;
-            massRemaining*=Mathf.Pow(1-t.abrasionPerMeter,Body.velocity.magnitude*dt);
+            if(world.Has(WorldLaw.FrictionHeat) && !ice) AddHeat(Body.velocity.sqrMagnitude*Mathf.Max(0,friction)*t.frictionHeatGain*dt);
+            if(!world.Has(WorldLaw.Abrasion) || Body.velocity.magnitude<=t.abrasionSpeedThreshold || temperature<=t.abrasionHotTemperature) return;
+            massRemaining*=Mathf.Pow(1-Mathf.Clamp01(t.abrasionPerMeter),Body.velocity.magnitude*dt);
             ThermalStep(0);
             if(massRemaining>=t.minimumMassFraction || indestructible) return;
             float energy=.5f*Mass*Body.velocity.sqrMagnitude;
@@ -147,8 +174,8 @@ namespace PhaseArena
             temperature=Mathf.Clamp(temperature,t.minimumTemperature,t.maximumTemperature);
             temperature=Mathf.MoveTowards(temperature,t.ambientTemperature,(t.ambientRecovery+Body.velocity.magnitude*t.windRecovery)*dt);
             TrackThermalShock(); if(Dead) return;
-            if(kind==BodyKind.Tree && temperature>80) { AddHeat(12*dt); Damage(3*dt,"燃烧",DamageKind.Overheat,true); }
-            else if(IsActor && temperature>80) Damage(Mathf.Min(t.overheatDamageLimit,(temperature-80)*.001f)*dt,"过热",DamageKind.Overheat,true);
+            if(kind==BodyKind.Tree && temperature>80) AddHeat(12*dt);
+            thermalInjury.Tick(this,world,dt); if(Dead) return;
             float factor=world.Has(WorldLaw.ThermalMass) ? Mathf.Clamp(1-(temperature-20)*t.massTemperatureSlope,t.hotMassFactor,t.coldMassFactor) : 1;
             float next=Mathf.Clamp(baseMass*massRemaining*factor,.0001f,80);
             if(Mathf.Abs(next-Body.mass)>.000001f)
@@ -158,12 +185,12 @@ namespace PhaseArena
             }
             var material=world.Has(WorldLaw.ColdBounce) && temperature<-40 ? world.bouncyMaterial : world.normalMaterial;
             if(bodyCollider.sharedMaterial!=material) bodyCollider.sharedMaterial=material;
-            if(world.Has(WorldLaw.ThermalExpansion) && kind!=BodyKind.StaticObstacle)
+            if(kind!=BodyKind.StaticObstacle && (world.Has(WorldLaw.ThermalExpansion) || massRemaining<1 || shape!=null))
             {
                 if(shape==null) shape=gameObject.AddComponent<ThermalShape>();
-                shape.Step(dt);
+                shape.RefreshWear();
+                if(world.Has(WorldLaw.ThermalExpansion)) shape.Step(dt); else shape.Restore();
             }
-            else if(shape!=null) shape.Restore();
         }
         public bool QualifiesForFission(float speed)
         {
@@ -184,6 +211,14 @@ namespace PhaseArena
                 world.SteamWave(this,before-temperature);
             }
             TrackThermalShock();
+        }
+        public void ClearThermalStatus()
+        {
+            var world=ArenaDirector.Instance;
+            temperature=world!=null ? world.tuning.ambientTemperature : 20;
+            shockArmed=false; thermalInjury.Reset();
+            // A cleanse sets the state directly: it is not a cooling collision/steam reaction.
+            ThermalStep(0);
         }
         public void ApplyForce(Vector2 force,ForceMode2D mode=ForceMode2D.Force)
         {
@@ -213,12 +248,21 @@ namespace PhaseArena
         public void Damage(float amount,string cause,DamageKind kindOfDamage=DamageKind.Impact,bool continuous=false)
         {
             if(Dead || indestructible || amount<=0) return;
-            if(kind==BodyKind.Player && !continuous && Time.time-LastDamageTime<.45f) return;
+            var hitFeedback=kind==BodyKind.Player ? GetComponent<PlayerHitFeedback>() : null;
+            if(hitFeedback!=null && hitFeedback.Invulnerable) return;
+            if(kind==BodyKind.Player)
+            {
+                var guard=GetComponent<PlayerDeathGuard>();
+                if(guard!=null) amount=guard.LimitDamage(this,amount);
+                if(amount<=0) return;
+            }
             float actual=Mathf.Min(amount,Mathf.Max(health,0));
             if(ArenaDirector.Instance!=null) ArenaDirector.Instance.RecordDamage(this,actual,kindOfDamage);
             LastDamageKind=kindOfDamage;
-            if(!continuous) LastDamageTime=Time.time;
+            if(!continuous || kind==BodyKind.Player) LastDamageTime=Time.time;
             health-=amount;
+            if(hitFeedback!=null && actual>0) hitFeedback.NotifyDamage();
+            if(kind==BodyKind.Player && actual>0 && ArenaAudio.Instance!=null) ArenaAudio.Instance.PlayWorld(ArenaAudio.Instance.playerHit,Body.position,.7f);
             if(health<=0) Die(cause,kindOfDamage);
         }
         public void Die(string cause,DamageKind kindOfDamage=DamageKind.Terrain)
@@ -287,7 +331,14 @@ namespace PhaseArena
                 }
                 world.ResolveCollision(this,other,speed,c.contactCount>0 ? contact.point : Body.position,c.contactCount>0 ? contact.normalImpulse : 0);
             }
-            else world.DeliverProjectileHeat(this,c.contactCount>0 ? c.GetContact(0).point : Body.position);
+            else
+            {
+                var contact=c.contactCount>0 ? c.GetContact(0) : default(ContactPoint2D);
+                float speed=c.contactCount>0 ? Mathf.Abs(Vector2.Dot(c.relativeVelocity,contact.normal)) : c.relativeVelocity.magnitude;
+                var terrain=c.collider.GetComponentInParent<TerrainCell>();
+                if(terrain!=null) world.Collisions.ResolveTerrainCollision(this,terrain,speed,c.contactCount>0 ? contact.point : Body.position,contact.normal);
+                else world.DeliverProjectileHeat(this,c.contactCount>0 ? contact.point : Body.position);
+            }
         }
     }
 }

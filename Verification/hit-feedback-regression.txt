@@ -1,0 +1,17 @@
+failures=0
+PASS High-health hit starts flash and short immunity without dark edge
+PASS First flash phase remains bright and visible
+PASS Next flash phase visibly reduces sprite alpha
+PASS Short immunity blocks both repeat impact and continuous damage
+PASS Ordinary immunity expires after 0.1 seconds
+PASS Damage after 0.1 seconds is accepted despite old 0.45-second timing
+PASS Flash ends and restores visible sprite
+PASS Public duration extends immunity and flashing together
+PASS Custom duration ends immunity and flashing together
+PASS Hit crossing below 20 percent darkens the edge
+PASS Border remains behind HUD and cannot intercept clicks
+PASS Low-health edge fades after 0.7 seconds
+PASS Exactly 20 percent health uses ordinary hit feedback
+PASS Reset removes feedback and short immunity
+PASS One-second death guard remains immune and flashing beyond ordinary hit duration
+PASS Damage resumes after one-second death guard expires

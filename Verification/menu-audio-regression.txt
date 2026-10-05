@@ -1,0 +1,43 @@
+failures=0
+PASS Initial title is visible
+PASS Title music loops
+PASS Generated art is assigned
+PASS Title has exactly Start / Settings / Quit, no Continue
+PASS Fixed 16 effect voices plus music and UI
+PASS Exactly one audio listener
+PASS All thirteen provided effects assigned
+PASS Settings works on title; Return Main Menu is hidden
+PASS Title settings has Close; music continues
+PASS Independent sliders drive actual music/effects volume
+PASS Slider percent labels update
+PASS Closing title settings does not start a run
+PASS Start button begins the first world
+PASS World 1 music playing
+PASS World 2 uses normal music
+PASS World 3 uses normal music
+PASS World 4 uses normal music
+PASS World 5 uses normal music
+PASS World 6 uses normal music
+PASS World 7 uses normal music
+PASS Final world switches to boss music
+PASS Actual F melee callback emits supplied staff sound
+PASS Player cast does not borrow enemy casting sound
+PASS Enemy projectile callback emits shooting sound
+PASS Enemy death callback emits death sound
+PASS Player actual health loss emits hit sound
+PASS Repeated identical impact sounds are throttled
+PASS Distant effects are culled
+PASS Effects mute is independent of music
+PASS UI click sound plays through its independent source
+PASS Esc opens paused game settings
+PASS Music continues while gameplay pauses
+PASS Resume restores gameplay
+PASS Closing settings preserves law-choice time freeze
+PASS Return test starts with growth, law and a charge preview
+PASS Return button clears run state
+PASS Return removes actors/projectiles/shards and hides generated world
+PASS Return resets player growth and health/mana
+PASS Return cancels charge preview
+PASS Return restores title music and hides settings
+PASS Starting again creates a fresh playable run
+PASS Changing worlds and runs does not grow audio source count

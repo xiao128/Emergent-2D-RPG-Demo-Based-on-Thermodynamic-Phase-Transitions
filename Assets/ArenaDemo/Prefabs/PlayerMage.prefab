@@ -583,6 +583,9 @@ GameObject:
   - component: {fileID: 4095337698421117999}
   - component: {fileID: 6567505410491527896}
   - component: {fileID: 15530632551494314}
+  - component: {fileID: 4788361774720608919}
+  - component: {fileID: 4159075735377910693}
+  - component: {fileID: 8475005675078775344}
   m_Layer: 8
   m_Name: PlayerMage
   m_TagString: Untagged
@@ -698,7 +701,7 @@ MonoBehaviour:
   visual: {fileID: 8726344178338610962}
   healthFill: {fileID: 4253411230992325023}
   heatRing: {fileID: 367541598881025485}
-  healthBarSize: {x: 0.84, y: 0.045}
+  healthBarSize: {x: 0.9, y: 0.045}
   owner: {fileID: 0}
   lastInteractor: {fileID: 0}
   indestructible: 0
@@ -780,9 +783,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   staff: {fileID: 8939779533855939638}
   facing: {fileID: 8726344178338610962}
-  maxMana: 100
+  maxMana: 20
   spellManaCost: 15
-  manaRecoveryPerSecond: 4
+  manaRecoveryPerSecond: 5
   mana: 100
 --- !u!114 &15530632551494314
 MonoBehaviour:
@@ -798,6 +801,43 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   manaFill: {fileID: 3940678610539072375}
   manaBack: {fileID: 786168186921210893}
+--- !u!114 &4788361774720608919
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7937709290830054658}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5ffbdcbbf9c92b04a9cb37891f75e728, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &4159075735377910693
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7937709290830054658}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94e4c29337207824a9658cff49cd34c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &8475005675078775344
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7937709290830054658}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f54e1c09ecc49e245983379b4af0cd5f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  invulnerabilityDuration: 0.1
 --- !u!1 &8773492665227834203
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,0 +1,1 @@
+PASS Full stone charge still permits actual physical movement; deltaX=0.006238937

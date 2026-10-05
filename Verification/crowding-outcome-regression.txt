@@ -1,0 +1,30 @@
+failures=0
+PASS Cached crowding count causes real player damage
+PASS Player crowding warning ring visible
+PASS Ring is a closed visual, without physical collider
+PASS Ring radius stays equal to detection radius on scaled player
+PASS Showing ring adds no per-frame crowding scan
+PASS Ring disappears after cached count drops to threshold
+PASS Crowded enemies also show a warning ring
+PASS Props/projectiles do not receive actor crowding rings
+PASS Removing law immediately hides warning rings
+PASS Fatal actual damage immediately removes player from active world
+PASS Defeat does not reveal result immediately
+PASS Player is actually destroyed, including charge preview
+PASS Death scene has no result popup or player marker; camera remains at scene
+PASS Death cause remains readable without player object
+PASS Defeat result remains hidden before five real seconds
+PASS Defeat result appears after five real seconds; measured=5.021
+PASS Result works with frozen time and preserves cause/statistics
+PASS Result restart button creates a new living player
+PASS Respawn preserves scene-authored mana/speed/hit duration
+PASS Respawn preserves internal sprite/staff/animation references
+PASS Camera and registry track exactly one restored player
+PASS Restart cancels old result and resumes simulation
+PASS Boss death removes player and starts victory delay
+PASS Victory player is actually destroyed and popup stays hidden
+PASS Victory popup stays hidden before five seconds
+PASS Victory result appears after five seconds
+PASS Return to title after victory restores player and menu
+PASS New run resets growth without losing initial scene mana
+PASS Returning during delay cancels stale popup permanently

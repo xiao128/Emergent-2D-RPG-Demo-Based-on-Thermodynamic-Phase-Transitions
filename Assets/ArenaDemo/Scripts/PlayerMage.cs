@@ -14,7 +14,7 @@ namespace PhaseArena
         public float Mana => mana;
         public float FireReady { get; private set; }
         public float IceReady { get; private set; }
-        public float ShieldReady { get; private set; }
+        public float RecoveryReady { get; private set; }
         public float MeleeReady { get; private set; }
         public ThermoBody LastMeleeTarget { get; private set; }
         ThermoBody entity;
@@ -26,13 +26,32 @@ namespace PhaseArena
         bool chargeFire,waitForRelease;
         float chargeElapsed;
         public bool IsCharging => charging;
+        public bool IsWalking => move.sqrMagnitude>.01f;
         public float ChargeProgress => IsCharging ? Mathf.Clamp01(chargeElapsed/Mathf.Max(.01f,ArenaDirector.Instance.tuning.projectileChargeDuration)) : 0;
+        public float StoneChargeProgress
+        {
+            get
+            {
+                var g=ArenaDirector.Instance;
+                if(!IsCharging || !g.Tools.UsesStoneMagic(entity)) return 0;
+                float minimum=Mathf.Max(.01f,g.tuning.projectileChargeDuration);
+                return Mathf.Clamp01((chargeElapsed-minimum)/Mathf.Max(.01f,g.tuning.stoneFullChargeDuration-minimum));
+            }
+        }
 #if UNITY_EDITOR
         public Vector2? VerificationMove;
         public bool? VerificationSlowWalk;
         public bool? VerificationHoldCharge;
 #endif
-        void Awake() { entity = GetComponent<ThermoBody>(); spriteAnimator=GetComponent<BodySpriteAnimator>(); mana=maxMana; }
+        void Awake()
+        {
+            entity=GetComponent<ThermoBody>(); spriteAnimator=GetComponent<BodySpriteAnimator>(); mana=maxMana;
+            if(GetComponent<PlayerProgression>()==null) gameObject.AddComponent<PlayerProgression>();
+            if(GetComponent<PlayerDeathGuard>()==null) gameObject.AddComponent<PlayerDeathGuard>();
+            if(GetComponent<PlayerHitFeedback>()==null) gameObject.AddComponent<PlayerHitFeedback>();
+            if(GetComponent<ArenaFootsteps>()==null) gameObject.AddComponent<ArenaFootsteps>();
+        }
+        public void AddMana(float amount) { mana=Mathf.Min(maxMana,mana+amount); }
         void Update()
         {
             var game = ArenaDirector.Instance;
@@ -65,7 +84,7 @@ namespace PhaseArena
                 if(Input.GetMouseButton(0)) Cast(true,aim);
                 else if(Input.GetMouseButton(1)) Cast(false,aim);
             }
-            if (Input.GetKeyDown(KeyCode.Space)) Shield();
+            if (Input.GetKeyDown(KeyCode.Space)) Recover();
             if (Input.GetKeyDown(KeyCode.F)) Melee(aim);
         }
         void FixedUpdate()
@@ -90,7 +109,7 @@ namespace PhaseArena
             aim=direction.normalized; chargeFire=fire; chargeElapsed=0; charging=true;
             // Preview only: no rigidbody, collider, temperature or projectile slot.
             chargePreview=new GameObject("Spell charge preview").AddComponent<SpriteRenderer>();
-            chargePreview.sprite=fire ? ArenaDirector.Instance.fireSprite : ArenaDirector.Instance.iceSprite;
+            chargePreview.sprite=ArenaDirector.Instance.Tools.ProjectileSprite(entity,fire ? 105 : -95);
             chargePreview.sharedMaterial=ArenaDirector.Instance.projectilePrefab.visual.sharedMaterial;
             chargePreview.color=fire ? new Color(1,.75f,.35f,.8f) : new Color(.65f,.94f,1,.8f);
             UpdateChargePreview();
@@ -105,16 +124,17 @@ namespace PhaseArena
         {
             if(chargePreview==null) return;
             var g=ArenaDirector.Instance;
-            chargePreview.transform.position=g.ProjectileSpawnPosition(entity,aim);
+            var profile=g.Tools.Profile(entity,StoneChargeProgress);
+            chargePreview.transform.position=g.ProjectileSpawnPosition(entity,aim,StoneChargeProgress);
             chargePreview.sortingOrder=entity.visual.sortingOrder+1;
-            float diameter=g.projectilePrefab.radius*2*Mathf.Lerp(.15f,1,ChargeProgress);
+            Vector2 visualSize=profile.VisualSize*Mathf.Lerp(.15f,1,ChargeProgress);
             var size=chargePreview.sprite.bounds.size;
-            chargePreview.transform.localScale=new Vector3(diameter/Mathf.Max(.01f,size.x),diameter/Mathf.Max(.01f,size.y),1);
+            chargePreview.transform.localScale=new Vector3(visualSize.x/Mathf.Max(.01f,size.x),visualSize.y/Mathf.Max(.01f,size.y),1);
         }
         public bool ReleaseCharge(Vector2 direction)
         {
             if(!IsCharging || ChargeProgress<1 || mana<spellManaCost) return false;
-            var shot=ArenaDirector.Instance.Shoot(entity,direction,chargeFire ? 105 : -95);
+            var shot=ArenaDirector.Instance.Shoot(entity,direction,chargeFire ? 105 : -95,StoneChargeProgress);
             if(shot==null)
             {
                 ArenaDirector.Instance.Feedback(entity.Body.position,"前方空间不足，无法成球",new Color(1,.8f,.4f));
@@ -133,7 +153,7 @@ namespace PhaseArena
         void OnDestroy() { CancelCharge(); }
         public void ResetTools()
         {
-            FireReady=IceReady=ShieldReady=MeleeReady=0;
+            FireReady=IceReady=RecoveryReady=MeleeReady=0;
             CancelCharge(); waitForRelease=false;
             mana=maxMana;
             move=Vector2.zero; slowWalk=false;
@@ -143,11 +163,16 @@ namespace PhaseArena
             VerificationHoldCharge=null;
 #endif
         }
-        public bool Shield()
+        public bool Recover()
         {
-            if (Time.time < ShieldReady || entity.Dead || !ArenaDirector.Instance.SimulationActive) return false;
-            ShieldReady = Time.time + ArenaDirector.Instance.tuning.shieldCooldown;
-            ArenaDirector.Instance.CreateShields(entity);
+            var g=ArenaDirector.Instance;
+            if (g==null || Time.time < RecoveryReady || entity.Dead || !g.SimulationActive) return false;
+            RecoveryReady = Time.time + g.tuning.recoveryCooldown;
+            float before=entity.health;
+            entity.health=Mathf.Min(entity.maxHealth,entity.health+entity.maxHealth*g.tuning.recoveryHealthFraction);
+            entity.ClearThermalStatus();
+            g.Pulse(entity.Body.position,new Color(.35f,1,.65f),entity.radius+1);
+            g.Feedback(entity.Body.position,"恢复 +"+Mathf.RoundToInt(entity.health-before)+" · 常温",new Color(.35f,1,.65f));
             return true;
         }
         public bool Melee(Vector2 direction)
@@ -156,6 +181,7 @@ namespace PhaseArena
             if(IsCharging && ChargeProgress>=1) ReleaseCharge(direction);
             MeleeReady = Time.time + ArenaDirector.Instance.tuning.staffCooldown;
             LastMeleeTarget=ArenaDirector.Instance.Melee(entity,direction);
+            if(ArenaAudio.Instance!=null) ArenaAudio.Instance.PlayWorld(ArenaAudio.Instance.staffHit,entity.Body.position,.8f);
             return true;
         }
     }

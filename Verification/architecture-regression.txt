@@ -35,8 +35,8 @@ PASS Player cold bounce and superconductive friction
 PASS Player thermal expansion
 PASS Rapid cooling emits steam wave without water contact
 PASS Steam wave cooldown prevents recursive wave spam
-PASS Density gravity attracts heavy neutral bodies without old temperature restrictions
-PASS Eight crowded items receive continuous damage
+PASS Cold heavy source attracts warm heavy target
+PASS Nearby items count across actor-radius queries and are not themselves crowding damage targets
 PASS Shared projectile FIFO removes oldest at 250, preserving second
 PASS Health and mana bars remain horizontal under root rotation
 PASS Mini mana sits beneath mini health

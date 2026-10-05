@@ -18,7 +18,11 @@ namespace PhaseArena
         readonly Dictionary<ThermoBody,Vector2> centers=new Dictionary<ThermoBody,Vector2>();
         bool denseFallback;
         Collider2D[] nearbyColliders=new Collider2D[64];
+        readonly HashSet<ThermoBody> crowdingNeighbors=new HashSet<ThermoBody>();
         public int LastNeighborCandidates { get; private set; }
+        public int LastCrowdingQueries { get; private set; }
+        public float RadiationMultiplier => Has(WorldLaw.ExpandedRadiation) ? tuning.expandedRadiationMultiplier : 1;
+        public float RadiationRadius => tuning.thermalRadiationRadius*RadiationMultiplier;
         int Query(Vector2 center,float radius)
         {
             int count;
@@ -32,9 +36,25 @@ namespace PhaseArena
         TerrainCell[] terrain => world.terrain;
         TerrainCell FloorAt(Vector2 p) => world.FloorAt(p);
         public WorldLawSimulation(ArenaDirector world) { this.world=world; }
+        public bool IsGravitySource(ThermoBody body) => body!=null && !body.Dead
+            && body.Mass>tuning.gravityMassThreshold && body.temperature<tuning.gravityColdTemperature;
+        public int CountCrowdingNeighbors(ThermoBody actor)
+        {
+            LastCrowdingQueries++;
+            crowdingNeighbors.Clear();
+            int count=Query(actor.Collider.bounds.center,Mathf.Max(0,tuning.crowdingRadius));
+            for(int i=0;i<count;i++)
+            {
+                var other=world.BodyFor(nearbyColliders[i]);
+                if(other==null) other=nearbyColliders[i].GetComponentInParent<ThermoBody>();
+                if(other!=null && other!=actor && !other.Dead && !other.IsCharging && other.gameObject.activeInHierarchy)
+                    crowdingNeighbors.Add(other);
+            }
+            return crowdingNeighbors.Count;
+        }
         public void Tick(float dt)
         {
-            LastNeighborCandidates=0;
+            LastNeighborCandidates=0; LastCrowdingQueries=0;
             int poolIndex=0; thermalGrid.Clear(); centers.Clear(); denseFallback=false;
             using(var snapshot=BodySnapshot.Rent(bodies)) for(int i=snapshot.Bodies.Count-1;i>=0;i--)
             {
@@ -51,21 +71,23 @@ namespace PhaseArena
                 bucket.Add(b);
                 if(bucket.Count>=64) denseFallback=true;
             }
+            float heatRadius=RadiationRadius;
+            int neighborReach=Mathf.CeilToInt(heatRadius/2.5f);
             foreach(var cell in thermalGrid) foreach(var a in cell.Value)
             {
                 if(a.Dead) continue;
-                for(int x=-1;x<=1;x++) for(int y=-1;y<=1;y++)
+                for(int x=-neighborReach;x<=neighborReach;x++) for(int y=-neighborReach;y<=neighborReach;y++)
                 {
                     List<ThermoBody> nearby;
                     if(!thermalGrid.TryGetValue(cell.Key+new Vector2Int(x,y),out nearby)) continue;
                     foreach(var b in nearby)
                     {
-                        if(b.Dead || b==a || b.GetInstanceID()<=a.GetInstanceID() || (a.Body.position-b.Body.position).sqrMagnitude>5.76f) continue;
+                        if(b.Dead || b==a || b.GetInstanceID()<=a.GetInstanceID() || (a.Body.position-b.Body.position).sqrMagnitude>heatRadius*heatRadius) continue;
                         float q=(a.temperature-b.temperature)*.45f*dt/(1/a.Mass+1/b.Mass);
                         a.AddHeat(-q/a.Mass); b.AddHeat(q/b.Mass);
                     }
                 }
-                if(Has(WorldLaw.Gravity) && a.Density>=tuning.gravityDensityThreshold)
+                if(Has(WorldLaw.Gravity) && IsGravitySource(a))
                 {
                     if(denseFallback)
                     {
@@ -83,14 +105,10 @@ namespace PhaseArena
                     float q=(a.temperature-floor.temperature)*.35f*dt; a.AddHeat(-q); floor.AddHeat(q*.7f);
                 }
             }
-            if(Has(WorldLaw.Crowding))
-                foreach(var cell in thermalGrid)
+            using(var snapshot=BodySnapshot.Rent(bodies)) foreach(var actor in snapshot.Bodies)
                 {
-                    int count=0;
-                    foreach(var b in cell.Value) if(b!=null && !b.Dead && b.IsCrowdingItem) count++;
-                    if(count<=tuning.crowdingItemThreshold) continue;
-                    float damage=(count-tuning.crowdingItemThreshold)*tuning.crowdingDamagePerExcessPerSecond*dt;
-                    foreach(var b in cell.Value) if(b!=null && !b.Dead && b.IsCrowdingItem) b.Damage(damage,"拥挤",DamageKind.Crowding,true);
+                    if(actor==null || !actor.IsActor || actor.Dead || actor.IsCharging || !actor.gameObject.activeInHierarchy) continue;
+                    actor.TickCrowding(dt);
                 }
             if(Has(WorldLaw.Leidenfrost))
             {

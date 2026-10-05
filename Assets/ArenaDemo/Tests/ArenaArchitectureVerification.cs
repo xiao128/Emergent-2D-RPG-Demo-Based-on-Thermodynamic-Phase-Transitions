@@ -42,6 +42,9 @@ namespace PhaseArena
             results.Clear(); fixtures.Clear(); failures=0;
             if(world.State==RunState.Title) world.StartRun(); else world.Restart();
             mage=world.player.GetComponent<PlayerMage>(); mage.enabled=false;
+            float authoredMana=mage.maxMana;
+            // This fixture exercises many spells independently of authored balance.
+            mage.maxMana=Mathf.Max(authoredMana,mage.spellManaCost*20); mage.ResetTools();
             foreach(var ai in UnityEngine.Object.FindObjectsOfType<EnemyBrain>()) ai.gameObject.SetActive(false);
             foreach(var prop in world.worldGenerator.props) prop.gameObject.SetActive(false);
             Clear();
@@ -58,7 +61,7 @@ namespace PhaseArena
                 StatusBars(); Clear();
             }
             catch(Exception ex) { Check(false,"Exception: "+ex); }
-            finally { Clear(); }
+            finally { Clear(); mage.maxMana=authoredMana; mage.ResetTools(); }
             string report="failures="+failures+"\n"+string.Join("\n",results);
             Directory.CreateDirectory("Verification"); File.WriteAllText("Verification/architecture-regression.txt",report);
             Debug.Log("[ArchitectureVerification] "+report);
@@ -126,7 +129,7 @@ namespace PhaseArena
             foreach(var kind in new[]{BodyKind.Rock,BodyKind.Projectile,BodyKind.Enemy,BodyKind.Boss,BodyKind.Player})
             {
                 var body=Fixture(new Vector2(-20,-20),kind);
-                world.laws.Clear(); world.laws.Add(WorldLaw.Abrasion);
+                world.laws.Clear(); world.laws.Add(WorldLaw.Abrasion); world.laws.Add(WorldLaw.FrictionHeat);
                 body.temperature=60; body.Body.velocity=Vector2.right*10;
                 body.ApplyGroundFrictionLaws(.6f,false,.1f);
                 Check(body.temperature>60 && body.Mass<1,kind+" friction heating and mass erosion");
@@ -153,13 +156,14 @@ namespace PhaseArena
             a.temperature=160; a.AddHeat(-80);
             Check(world.metrics.vaporBursts==bursts+1,"Steam wave cooldown prevents recursive wave spam");
             world.laws.Clear(); world.laws.Add(WorldLaw.Gravity);
-            a.temperature=b.temperature=20; b.baseMass=5; b.ThermalStep(0); b.Body.velocity=Vector2.zero;
+            a.temperature=-120; b.temperature=20; a.baseMass=world.tuning.gravityMassThreshold+.1f; a.ThermalStep(0);
+            b.baseMass=5; b.ThermalStep(0); b.Body.velocity=Vector2.zero;
             world.LawSimulation.Tick(.1f);
-            Check(a.Density>=world.tuning.gravityDensityThreshold && b.Body.velocity.x<0,"Density gravity attracts heavy neutral bodies without old temperature restrictions");
+            Check(world.LawSimulation.IsGravitySource(a) && !world.LawSimulation.IsGravitySource(b) && b.Body.velocity.x<0,"Cold heavy source attracts warm heavy target");
             Clear(); world.laws.Add(WorldLaw.Crowding);
             for(int i=0;i<8;i++) Fixture(new Vector2(-21+i*.03f,-21));
             world.LawSimulation.Tick(.1f);
-            Check(fixtures.TrueForAll(body=>body.health<10000),"Eight crowded items receive continuous damage");
+            Check(world.LawSimulation.CountCrowdingNeighbors(fixtures[0])==7 && fixtures.TrueForAll(body=>body.health==10000),"Nearby items count across actor-radius queries and are not themselves crowding damage targets");
         }
         static void ProjectileQueue()
         {

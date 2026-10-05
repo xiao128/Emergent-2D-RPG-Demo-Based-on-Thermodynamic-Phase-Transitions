@@ -38,7 +38,8 @@ namespace PhaseArena
             Check(world.State==RunState.Victory,"Boss defeat enters victory");
             world.Restart();
             Check(world.World==1 && world.laws.Count==0 && world.Fragments==0,"Restart clears progress and laws");
-            world.player.Damage(world.player.health+1,"流程验证",DamageKind.Impact);
+            world.player.health=5;
+            world.player.Damage(5,"流程验证",DamageKind.Impact);
             Check(world.State==RunState.Defeat,"Player death enters defeat");
             world.Restart();
             Check(world.State==RunState.Explore && !world.player.Dead,"Restart after defeat restores playable state");

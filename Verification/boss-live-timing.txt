@@ -1,0 +1,10 @@
+World=8
+ElapsedGameSeconds=37.20273
+Alert=True
+DistanceToPlayer=2.164627
+DistanceFromHome=57.60892
+Volleys=25
+Summons=1
+NextSummonAt=92.06
+SimulationActive=True
+FixtureHealthRaised=true

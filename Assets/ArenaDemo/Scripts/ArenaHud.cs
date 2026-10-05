@@ -21,25 +21,42 @@ namespace PhaseArena
         bool missingMageReported;
         void Awake()
         {
-            startButton.onClick.AddListener(()=>ArenaDirector.Instance.StartRun());
+            PlayerScreenFeedback.Ensure(GetComponentInParent<Canvas>());
+            PlayerTemperatureBorder.Ensure(GetComponentInParent<Canvas>());
+            startButton.onClick.AddListener(()=> { var menu=GetComponent<ArenaMenuUI>(); if(menu!=null) menu.CloseSettings(); ArenaDirector.Instance.StartRun(); });
             restartButton.onClick.AddListener(()=>ArenaDirector.Instance.Restart());
-            resumeButton.onClick.AddListener(()=>ArenaDirector.Instance.TogglePause());
+            resumeButton.onClick.AddListener(()=> { var menu=GetComponent<ArenaMenuUI>(); if(menu!=null) menu.CloseSettings(); else ArenaDirector.Instance.TogglePause(); });
             for(int i=0;i<choiceButtons.Length;i++) { int slot=i; choiceButtons[i].onClick.AddListener(()=>ArenaDirector.Instance.ChooseLaw(slot)); }
         }
         void Update()
         {
-            var g=ArenaDirector.Instance; if(g==null || g.player==null || g.tuning==null) return;
+            var g=ArenaDirector.Instance; if(g==null || g.tuning==null) return;
             titlePanel.SetActive(g.State==RunState.Title);
             upgradePanel.SetActive(g.State==RunState.Upgrade);
-            resultPanel.SetActive(g.State==RunState.Victory || g.State==RunState.Defeat);
+            bool finished=g.State==RunState.Victory || g.State==RunState.Defeat;
+            resultPanel.SetActive(finished && g.Outcome.ResultReady);
             pausePanel.SetActive(g.Paused);
             if(Time.unscaledTime<nextUiAt) return; nextUiAt=Time.unscaledTime+.1f;
+            if(finished)
+            {
+                if(hoverCursor!=null) hoverCursor.gameObject.SetActive(false);
+                healthBar.fillAmount=0; healthLabel.text=g.State==RunState.Victory ? "试炼完成" : "法师已倒下";
+                if(manaBar!=null) manaBar.fillAmount=0; if(manaLabel!=null) manaLabel.text="";
+                physicalLabel.text=skillsLabel.text=targetLabel.text="";
+                if(reactionLabel!=null) reactionLabel.text="";
+                messageLabel.text=g.Message;
+                UpdateResult(g);
+                return;
+            }
+            if(g.player==null) return;
             waveLabel.text=g.State==RunState.Title ? "PHASE ARENA  /  世界钟试炼"
                 : g.State==RunState.Boss ? "第 8 / 8 周目  ·  右侧世界钟魔王"
                 : "第 "+g.World+" / 8 周目    世界钟碎片 "+g.Fragments+"/2    右侧守卫 "+g.GuardsRemaining;
             healthBar.fillAmount=Mathf.Clamp01(g.player.health/g.player.maxHealth);
             healthLabel.text="生命 "+Mathf.CeilToInt(Mathf.Max(0,g.player.health))+" / "+g.player.maxHealth.ToString("0");
+            var progression=g.player.GetComponent<PlayerProgression>();
             physicalLabel.text="温度 "+g.player.temperature.ToString("0")+"°C\n质量 "+g.player.Mass.ToString("0.00")+"   速度 "+g.player.Body.velocity.magnitude.ToString("0.0");
+            if(progression!=null) physicalLabel.text="等级 "+progression.Level+"  经验 "+progression.Experience+" / "+progression.RequiredExperience+"\n"+physicalLabel.text;
             if(g.Has(WorldLaw.Abrasion)) physicalLabel.text+="\n物质剩余 "+Mathf.RoundToInt(g.player.massRemaining*100)+"%";
             else if(g.Has(WorldLaw.ThermalExpansion)) physicalLabel.text+="\n占地大小 ×"+g.player.ShapeScale.ToString("0.00");
             builder.Clear();
@@ -67,10 +84,12 @@ namespace PhaseArena
             missingMageReported=false;
             if(manaBar!=null) manaBar.fillAmount=Mathf.Clamp01(mage.Mana/Mathf.Max(1,mage.maxMana));
             if(manaLabel!=null) manaLabel.text="法力 "+Mathf.FloorToInt(mage.Mana)+" / "+mage.maxMana.ToString("0");
-            skillsLabel.text="左键 蓄火 "+Cooldown(mage.FireReady)+"    右键 蓄冰 "+Cooldown(mage.IceReady)+"    空格 护盾 "+Cooldown(mage.ShieldReady)+"    F 踢球 / 推动 "+Cooldown(mage.MeleeReady)
-                +"\n蓄力 "+g.tuning.projectileChargeDuration.ToString("0.0")+" 秒 · 松开成球 / F 成球并踢出    WASD 移动 · Shift 慢行 · E 世界钟 · Esc 暂停"
-                +(mage.IsCharging ? "  蓄力 "+Mathf.RoundToInt(mage.ChargeProgress*100)+"%" : "");
+            bool stoneMagic=g.Tools.UsesStoneMagic(g.player);
+            skillsLabel.text="左键 "+(stoneMagic ? "蓄火石 " : "蓄火 ")+Cooldown(mage.FireReady)+"    右键 "+(stoneMagic ? "蓄冰石 " : "蓄冰 ")+Cooldown(mage.IceReady)+"    空格 恢复 "+Cooldown(mage.RecoveryReady)+"    F 踢球 / 推动 "+Cooldown(mage.MeleeReady)
+                +"\n蓄力 "+g.tuning.projectileChargeDuration.ToString("0.0")+(stoneMagic ? "-"+g.tuning.stoneFullChargeDuration.ToString("0.0") : "")+" 秒 · 松开成球 / F 成球并踢出    WASD 移动 · Shift 慢行 · E 世界钟 · Esc 暂停"
+                +(mage.IsCharging ? stoneMagic && mage.ChargeProgress>=1 ? "  石头增大 "+Mathf.RoundToInt(mage.StoneChargeProgress*100)+"%" : "  蓄力 "+Mathf.RoundToInt(mage.ChargeProgress*100)+"%" : "");
             targetLabel.text="环境实验\n移动蓄力，松开生成球；F 成球并踢出。\n冻结水面造桥，加热冰面使其融化。\n\n悬停查看温度、质量和速度。";
+            if(stoneMagic) targetLabel.text="挥石魔法\n继续蓄力变大、变重。\n松开生成，F 推动。\n\n悬停查看物理状态。";
             if(Camera.main!=null)
             {
                 Vector2 p=Camera.main.ScreenToWorldPoint(Input.mousePosition);
@@ -83,18 +102,18 @@ namespace PhaseArena
                     targetLabel.text="目标 "+name+condition
                         +"\n温度 "+b.temperature.ToString("0")+"°C  质量 "+b.Mass.ToString(b.kind==BodyKind.Projectile ? "0.0000" : "0.00")
                         +"\n速度 "+b.Body.velocity.magnitude.ToString("0.0")
-                        +(g.Has(WorldLaw.Abrasion) ? "\n物质剩余 "+Mathf.RoundToInt(b.massRemaining*100)+"% · 温度高于常温且速度 > 5 时磨损" : "")
+                        +(g.Has(WorldLaw.Abrasion) ? "\n物质剩余 "+Mathf.RoundToInt(b.massRemaining*100)+"% · 温度 > "+g.tuning.abrasionHotTemperature.ToString("0.#")+"°C 且速度 > "+g.tuning.abrasionSpeedThreshold.ToString("0.#")+" 时热磨损" : "")
                         +(g.Has(WorldLaw.ThermalExpansion) ? "  大小 ×"+b.ShapeScale.ToString("0.00") : ""); break;
                 }
             }
-            if(g.State==RunState.Victory || g.State==RunState.Defeat)
-            {
+        }
+        void UpdateResult(ArenaDirector g)
+        {
                 resultTitle.text=g.State==RunState.Victory ? "魔王已被击败" : "整局试炼结束";
                 resultBody.text=(g.State==RunState.Victory ? "你用累计的世界法则完成了试炼。" : "倒下原因："+g.DeathCause)
                     +"\n\n到达第 "+g.World+" 周目 · 改写 "+g.metrics.upgrades+" 条法则\n"
                     +Mathf.RoundToInt(g.metrics.EnvironmentShare*100)+"% 伤害来自环境与法则反应\n击败 "+g.metrics.kills+" 个敌人 · 拾取 "+g.metrics.collectedFragments+" 枚碎片\n"
                     +"用时 "+Mathf.FloorToInt(g.metrics.seconds/60)+"分"+Mathf.FloorToInt(g.metrics.seconds%60)+"秒\n\n重新开始将清空本局法则与进度";
-            }
         }
         public void ShowChoices()
         {
@@ -103,7 +122,7 @@ namespace PhaseArena
             for(int i=0;i<choiceButtons.Length;i++)
             {
                 bool valid=i<g.Choices.Length; choiceButtons[i].gameObject.SetActive(valid);
-                if(valid) { cardTitles[i].text=ArenaDirector.LawName(g.Choices[i]); cardBodies[i].text=ArenaDirector.LawDescription(g.Choices[i])+"\n\n对玩家、怪物和环境共同生效"; }
+                if(valid) { cardTitles[i].text=ArenaDirector.LawName(g.Choices[i]); cardBodies[i].text=ArenaDirector.LawDescription(g.Choices[i])+(g.Choices[i]==WorldLaw.StoneMagic ? "\n\n改变玩家与小怪生成的投射物" : "\n\n对玩家、怪物和环境共同生效"); }
             }
             Canvas.ForceUpdateCanvases();
         }

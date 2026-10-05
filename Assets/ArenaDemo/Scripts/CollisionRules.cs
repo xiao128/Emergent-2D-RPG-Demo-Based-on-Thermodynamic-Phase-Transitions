@@ -14,8 +14,34 @@ namespace PhaseArena
         void Pulse(Vector2 p,Color c,float radius,float duration=.45f) => world.Pulse(p,c,radius,duration);
         void Feedback(Vector2 p,string s,Color c) => world.Feedback(p,s,c);
         readonly Dictionary<long,float> impactAt=new Dictionary<long,float>();
+        readonly Dictionary<int,float> terrainImpactAt=new Dictionary<int,float>();
         public CollisionRules(ArenaDirector world) { this.world=world; }
-        public void Clear() { impactAt.Clear(); }
+        public void Clear() { impactAt.Clear(); terrainImpactAt.Clear(); }
+        public void ResolveTerrainCollision(ThermoBody body,TerrainCell tile,float speed,Vector2 point,Vector2 normal)
+        {
+            if(!world.SimulationActive || body.Dead || tile.rough || tile.phase==FloorPhase.Ice) return;
+            // Neighboring river tiles form one surface: avoid multiplying a hit at tile seams.
+            float previous; int id=body.GetInstanceID();
+            if(terrainImpactAt.TryGetValue(id,out previous) && Time.time-previous<.1f) return;
+            terrainImpactAt[id]=Time.time; if(terrainImpactAt.Count>4096) terrainImpactAt.Clear(); metrics.collisions++;
+            if(Has(WorldLaw.Fission) && body.QualifiesForFission(speed))
+            {
+                Fission(body,.5f*body.Mass*speed*speed); body.Die("高速碎石撞击河岸爆炸",DamageKind.Fission); return;
+            }
+            float damage=ImpactDamage(tuning,body.Mass,speed);
+            body.Damage(damage,"撞击河岸",DamageKind.Impact);
+            if(damage>0 && ArenaAudio.Instance!=null) ArenaAudio.Instance.PlayWorld(ArenaAudio.Instance.waterImpact,point,.6f);
+            metrics.largestImpact=Mathf.Max(metrics.largestImpact,damage);
+            if(damage>10) Feedback(point,"河岸撞击 "+Mathf.RoundToInt(damage),new Color(1,.81f,.38f));
+            DeliverProjectileHeat(body,point);
+            if(Has(WorldLaw.ImpactHeat) && speed>tuning.impactHeatThreshold)
+            {
+                float heat=.5f*body.Mass*speed*speed*tuning.impactHeatFraction*tuning.impactTemperatureGain;
+                body.AddHeat(Mathf.Min(400,heat/Mathf.Max(.1f,body.Mass))); tile.AddHeat(Mathf.Min(400,heat));
+                body.Body.velocity-=normal*Vector2.Dot(body.Body.velocity,normal)*(1-Mathf.Sqrt(1-tuning.impactHeatFraction));
+                body.ThermalStep(0);
+            }
+        }
         public void ResolveCollision(ThermoBody a,ThermoBody b,float speed,Vector2 point,float impulse=0)
         {
             if(!world.SimulationActive || a.Dead || b.Dead) return;
@@ -43,6 +69,7 @@ namespace PhaseArena
                 float effective=a.Body.bodyType!=RigidbodyType2D.Dynamic ? b.Mass : b.Body.bodyType!=RigidbodyType2D.Dynamic ? a.Mass : a.Mass*b.Mass/(a.Mass+b.Mass);
                 float damage=ImpactDamage(tuning,effective,speed);
                 a.Damage(damage,"环境撞击",DamageKind.Impact); b.Damage(damage,"环境撞击",DamageKind.Impact);
+                if(damage>0 && (!a.IsActor || !b.IsActor) && ArenaAudio.Instance!=null) ArenaAudio.Instance.PlayWorld(ArenaAudio.Instance.stoneImpact,point,Mathf.Clamp(speed/30,.3f,1));
                 metrics.largestImpact=Mathf.Max(metrics.largestImpact,damage);
                 if(damage>10) Feedback(point,"撞击 "+Mathf.RoundToInt(damage),new Color(1,.81f,.38f));
             }
@@ -57,7 +84,7 @@ namespace PhaseArena
             // the tool's delivered heat is a separate input and must remain.
             DeliverProjectileHeat(a,point);
             DeliverProjectileHeat(b,point);
-            if(Has(WorldLaw.ImpactHeat) && speed>tuning.impactThreshold)
+            if(Has(WorldLaw.ImpactHeat) && speed>tuning.impactHeatThreshold)
             {
                 float effective=a.Body.bodyType!=RigidbodyType2D.Dynamic ? b.Mass : b.Body.bodyType!=RigidbodyType2D.Dynamic ? a.Mass : a.Mass*b.Mass/(a.Mass+b.Mass);
                 float energy=.5f*effective*speed*speed;
@@ -103,7 +130,7 @@ namespace PhaseArena
         }
         public static float ImpactDamage(ArenaTuning t,float mass,float speed)
         {
-            if(speed<(t!=null ? t.impactThreshold : 1.8f)) return 0;
+            if(speed<=(t!=null ? t.impactThreshold : 6.1f)) return 0;
             return Mathf.Min(t!=null ? t.impactDamageCap : 500,(t!=null ? t.impactAlpha : .1f)*mass*speed*speed+(t!=null ? t.impactBeta : 6)*mass);
         }
         public void ApplyHeatBlast(Vector2 p,float heat,float radius,ThermoBody source)

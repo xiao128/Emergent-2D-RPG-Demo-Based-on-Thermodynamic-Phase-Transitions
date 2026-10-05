@@ -1,0 +1,24 @@
+failures=0
+PASS Run begins at level 1 with 100 XP requirement
+PASS Ten small environmental kills level up once; duplicate death gives no XP
+PASS Level up adds exactly 10 max health and mana
+PASS Small medium large monsters grant 10 20 30 XP
+PASS Requirement rises 50 per level and surplus XP carries over
+PASS World rebuild preserves level XP and maximum stats
+PASS World progression no longer scales player health
+PASS Stone magic replaces double force in random pool
+PASS Player casts hot stone retaining fire temperature and delivered heat
+PASS Stone uses ordinary rock mass and retains shared FIFO and stationary player release
+PASS Hot stone still delivers its one-time heating pulse
+PASS Player casts cold stone retaining ice temperature and delivered cooling
+PASS Ranged small enemy throws cold stone retaining cooling and launch impulse
+PASS Stone charge preview gradually enlarges the rock sprite
+PASS Lethal burst locks player at one HP for one second
+PASS One-second immunity also blocks continuous damage
+PASS Immunity expires after one second
+PASS Lethal damage of exactly 20 percent does not trigger greater-than-20 protection
+PASS Restart restores base stats and clears XP
+PASS New short invulnerability blocks the second same-frame hit
+PASS Attack timing preserves windup at 175 percent speed
+PASS Actual ranged AI schedules shortened telegraph and cooldown
+PASS Actual ranged AI throws after shortened windup

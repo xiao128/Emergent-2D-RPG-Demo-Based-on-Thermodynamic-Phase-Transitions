@@ -1,0 +1,17 @@
+Play=False
+Scene=Assets/Scenes/PhaseArenaDemo.unity
+Dirty=False
+MissingScripts=0
+Selected=Assets/ArenaDemo/WorldTuning.asset
+VisibleFields=128
+MissingTooltips=
+CrowdInterval=1
+BossMass=6
+BossMoveSpeed=2
+BossDriveForce=40
+BossWindup=1.1
+BossCooldown=3.5
+BossRecovery=1.2
+BossProjectileImpulse=48
+BossRadialProjectiles=8
+BossSummonInterval=20

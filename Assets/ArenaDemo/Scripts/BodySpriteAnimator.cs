@@ -30,9 +30,9 @@ namespace PhaseArena
             bool hasWalk=directionalWalkFrames!=null && directionalWalkFrames.Length==16;
             visual.sprite=hasWalk ? directionalWalkFrames[frame] : directionalFrames[directionIndex]; visual.flipX=false;
             if(hasWalk && walkFrameOffsets!=null && walkFrameOffsets.Length==16)
-                visual.transform.localPosition=walkFrameOffsets[frame];
+                visual.transform.localPosition=walkFrameOffsets[frame]*(body!=null ? body.ShapeScale : 1);
             else if(directionalOffsets!=null && directionalOffsets.Length==4)
-                visual.transform.localPosition=directionalOffsets[directionIndex];
+                visual.transform.localPosition=directionalOffsets[directionIndex]*(body!=null ? body.ShapeScale : 1);
         }
         void LateUpdate() { if(HasDirections) ApplyDirection(); }
         void Update()

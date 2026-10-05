@@ -1,0 +1,7 @@
+playing=False
+scene=Assets/Scenes/PhaseArenaDemo.unity
+rootObjects=10
+playerPresent=True
+temperatureThreshold=40
+speedThreshold=8
+lossPerMeter=0.15

@@ -1,0 +1,6 @@
+Play=False
+Scene=Assets/Scenes/PhaseArenaDemo.unity
+Dirty=False
+MissingScripts=0
+XpMultiplier=1
+HeavyImpulse=120

@@ -1,0 +1,2 @@
+enemy animation retains wear scale=True
+player animation offsets follow wear=True

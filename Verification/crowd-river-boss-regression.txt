@@ -1,0 +1,46 @@
+failures=0
+PASS Counts seven mixed entities across former grid boundaries, excluding self
+PASS Multiple colliders on one entity count once
+PASS Seven neighbors damage the actor at three HP per second
+PASS Crowding damages actors rather than nearby projectiles, rocks or trees
+PASS Cached count continues damage without another spatial query
+PASS Exactly six neighbors do not cause damage after refreshed count
+PASS Unfinished charge previews do not count
+PASS Outside-radius entity does not count
+MEASURE playerCrowdCount=7 hp=99.7 max=100
+PASS Player takes the same crowding damage with normal hit feedback
+PASS Public 0.3-second interval determines the next per-actor scan
+PASS Public 0.5-second interval also changes scheduling without changing damage coefficient
+PASS Removing law clears cached hazard and timer
+PASS Per-actor first scans are spread over the one-second interval
+PASS Dense 250-projectile query grows reusable buffer without truncating counts
+MEASURE forcedWorstCase20Scans250ProjectilesMs=63.64
+MEASURE crowdQueriesOnly20Actors250ProjectilesMs=3.83
+PASS Real fast monster contact with water blocker causes impact damage
+MEASURE riverImpactDamage=58.67383
+PASS Walking-speed river contact does not deal impact damage
+PASS River impact shares kinetic heating rule for body and terrain
+PASS Frozen river permits crossing without phantom wall damage
+PASS River tile seam registers one impact, not multiplied adjacent hits
+PASS Distant guard death creates real clock fragment
+PASS Distant fragment receives independent minimap marker
+PASS Outlined diamond is positioned at actual dropped fragment
+PASS Fragment marker does not block UI input
+PASS Collecting fragment removes marker without leaving stale icon
+PASS Boss acquires distant player and actively approaches outside charge reach
+PASS Boss keeps pursuing beyond old eight-unit home leash
+PASS Once locked, boss does not drop distant target
+PASS Boss fires aimed projectile plus eight radial shots even during melee recovery
+PASS Aimed boss projectile receives configured 48 impulse toward player
+PASS Volley interval uses configurable base interval and attack speed
+PASS Guard is not summoned before its deadline
+PASS Summon deadline creates exactly one real guard
+PASS Successful summon schedules next guard in twenty game seconds
+PASS Summoned guard uses world health growth and can roam to attack
+PASS Multiple updates at one deadline do not duplicate summons
+PASS Paused battle suppresses summoning
+PASS Disabled enemy AI suppresses boss combat actions
+PASS Changing WorldTuning boss mass, movement speed and force applies to live boss
+PASS Independent boss windup and cooldown drive real attack timers
+PASS Independent boss recovery drives post-lunge timer
+PASS Public radial count four produces four ring shots plus one aimed shot

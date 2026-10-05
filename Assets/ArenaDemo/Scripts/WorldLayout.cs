@@ -16,6 +16,8 @@ namespace PhaseArena
     // Pure seeded layout. Used by the live generator and connectivity acceptance checks.
     public sealed class WorldLayout
     {
+        public const float MinimumRockScale=.85f, MaximumRockScale=1.55f;
+        public static float TypicalRockScale => (MinimumRockScale+MaximumRockScale)*.5f;
         public readonly int width, height, seed;
         public readonly Vector2 spawn, clock;
         public readonly Vector2[] guards;
@@ -115,7 +117,7 @@ namespace PhaseArena
         {
             for(int i=0;i<count;i++)
             {
-                float scale=kind==PropKind.Rock ? .85f+(float)rng.NextDouble()*.7f : kind==PropKind.Tree ? 1.65f+(float)rng.NextDouble()*.45f : 1.9f+(float)rng.NextDouble()*.6f;
+                float scale=kind==PropKind.Rock ? MinimumRockScale+(float)rng.NextDouble()*(MaximumRockScale-MinimumRockScale) : kind==PropKind.Tree ? 1.65f+(float)rng.NextDouble()*.45f : 1.9f+(float)rng.NextDouble()*.6f;
                 for(int attempt=0;attempt<160;attempt++)
                 {
                     Vector2 p=RandomPoint(3);

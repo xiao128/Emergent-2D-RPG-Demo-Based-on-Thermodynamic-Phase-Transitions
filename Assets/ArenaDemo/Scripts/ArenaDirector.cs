@@ -7,7 +7,7 @@ using UnityEngine;
 namespace PhaseArena
 {
     public enum RunState { Title, Explore, Upgrade, Transition, Boss, Victory, Defeat }
-    public enum DamageKind { Spell, Staff, Overheat, Impact, Arc, Fission, Terrain, ThermalShock, Crush, Crowding }
+    public enum DamageKind { Spell, Staff, Overheat, Impact, Arc, Fission, Terrain, ThermalShock, Crush, Crowding, Frostbite }
     [Serializable] public class RunMetrics
     {
         public int spawned, kills, shots, collisions, frozenTiles, meltedTiles, upgrades, arcs, vaporBursts, explosions, collectedFragments;
@@ -60,30 +60,48 @@ namespace PhaseArena
         void Awake()
         {
             Instance=this; Time.timeScale=1;
+            Players.Capture();
             foreach(var b in FindObjectsOfType<ThermoBody>()) Register(b);
         }
         void OnDestroy() { if(Instance==this) { Instance=null; Time.timeScale=1; } }
         public bool Has(WorldLaw law) => laws.Contains(law);
-        public float ForceMultiplier => Has(WorldLaw.DoubleForce) ? 2 : 1;
+        public float ForceMultiplier => 1;
         public void Register(ThermoBody b) { registry.Register(b); }
         public void Unregister(ThermoBody b) { registry.Unregister(b); }
         public ThermoBody BodyFor(Collider2D collider) => registry.BodyFor(collider);
         public void StartRun()
         {
             if(State!=RunState.Title) return;
+            Players.Restore();
+            SetPaused(false);
             RunSeed=randomSeed!=0 ? randomSeed : Guid.NewGuid().GetHashCode() & int.MaxValue;
             lawRandom=new System.Random(RunSeed^1103515245);
             SpawnPosition=WorldLayout.SpawnAt(tuning);
             clock.position=WorldLayout.ClockAt(tuning);
             Physics2D.maxTranslationSpeed=Mathf.Max(tuning.rockSpeedLimit,tuning.actorSpeedLimit,tuning.spellSpeedLimit);
+            player.GetComponent<PlayerProgression>().ResetRun(tuning.playerHealth);
             laws.Clear(); metrics=new RunMetrics(); World=1; BuildWorld();
         }
         public void Restart()
         {
+            ReturnToTitle();
+            Message="新的一局：所有世界法则与碎片已重置。"; StartRun();
+        }
+        public void ReturnToTitle()
+        {
+            Outcome.Cancel();
             StopAllCoroutines(); Time.timeScale=1; Paused=false; State=RunState.Title;
             laws.Clear(); Choices=new WorldLaw[0]; Fragments=0; World=0; DeathCause=null;
-            ClearRuntime(); player.ResetAt(SpawnPosition);
-            Message="新的一局：所有世界法则与碎片已重置。"; StartRun();
+            GuardsRemaining=0; thermalTimer=messageUntil=ReactionUntil=0; RecentReaction=null;
+            metrics=new RunMetrics();
+            ClearRuntime();
+            if(worldGenerator.generatedRoot!=null) worldGenerator.generatedRoot.gameObject.SetActive(false);
+            Players.Restore();
+            player.GetComponent<PlayerProgression>().ResetRun(tuning.playerHealth);
+            player.ResetAt(SpawnPosition);
+            player.GetComponent<PlayerMage>().ResetTools();
+            if(ArenaAudio.Instance!=null) ArenaAudio.Instance.StopEffects();
+            Message="冰火调温，法杖推动；利用世界击败守卫。";
         }
         void ClearRuntime()
         {
@@ -98,7 +116,6 @@ namespace PhaseArena
             int seed=unchecked(RunSeed+World*104729);
             clock.position=WorldLayout.ClockAt(tuning);
             worldGenerator.Generate(seed,SpawnPosition);
-            player.maxHealth=tuning.PlayerHealthAt(World);
             player.ResetAt(SpawnPosition); player.GetComponent<PlayerMage>().ResetTools();
             int i=0;
             foreach(var p in worldGenerator.Layout.monsters)
@@ -138,13 +155,22 @@ namespace PhaseArena
         public void TogglePause()
         {
             if(State!=RunState.Explore && State!=RunState.Boss) return;
-            Paused=!Paused; Time.timeScale=Paused ? 0 : 1;
+            SetPaused(!Paused);
+        }
+        public void SetPaused(bool paused)
+        {
+            Paused=paused;
+            Time.timeScale=paused || State==RunState.Upgrade || State==RunState.Victory || State==RunState.Defeat ? 0 : 1;
         }
         void Update()
         {
             frameAverage=Mathf.Lerp(frameAverage,Time.unscaledDeltaTime,.04f);
-            if(Input.GetKeyDown(KeyCode.Escape)) TogglePause();
-            if(Input.GetKeyDown(KeyCode.R) && (State==RunState.Victory || State==RunState.Defeat)) Restart();
+            if(Input.GetKeyDown(KeyCode.Escape))
+            {
+                var menu=hud!=null ? hud.GetComponent<ArenaMenuUI>() : null;
+                if(menu!=null) menu.HandleEscape(); else TogglePause();
+            }
+            if(Input.GetKeyDown(KeyCode.R) && Outcome.ResultReady && (State==RunState.Victory || State==RunState.Defeat)) Restart();
             if(!SimulationActive) return;
             metrics.seconds+=Time.deltaTime;
             if(clockHand!=null) clockHand.Rotate(0,0,-Time.deltaTime*24);
@@ -216,7 +242,7 @@ namespace PhaseArena
         {
             if(!target.IsEnemy) return;
             metrics.enemyDamage+=amount;
-            if(kind==DamageKind.Spell || kind==DamageKind.Staff || kind==DamageKind.Overheat) metrics.directEnemyDamage+=amount;
+            if(kind==DamageKind.Spell || kind==DamageKind.Staff) metrics.directEnemyDamage+=amount;
             else metrics.environmentalEnemyDamage+=amount;
         }
         public void Pulse(Vector2 p,Color color,float radius,float duration=.45f)
@@ -235,9 +261,13 @@ namespace PhaseArena
         }
         public void OnBodyDied(ThermoBody b,string cause)
         {
+            if(State==RunState.Victory || State==RunState.Defeat) return;
             if(b.IsEnemy)
             {
+                if(b.kind!=BodyKind.Boss && ArenaAudio.Instance!=null) ArenaAudio.Instance.PlayWorld(ArenaAudio.Instance.slimeDeath,b.Body.position,.7f);
                 metrics.kills++; Pulse(b.Body.position,new Color(.6f,.9f,.65f),.65f);
+                var enemy=b.GetComponent<EnemyBrain>();
+                player.GetComponent<PlayerProgression>().AwardKill(enemy!=null ? enemy.experienceReward : 20);
                 if(b.isElite && State==RunState.Explore)
                 {
                     GuardsRemaining=Mathf.Max(0,GuardsRemaining-1);
@@ -248,17 +278,23 @@ namespace PhaseArena
                 if(b.kind==BodyKind.Boss && State==RunState.Boss)
                 {
                     State=RunState.Victory; Time.timeScale=0; Message="魔王已被击败，世界钟试炼完成！";
+                    Outcome.Begin();
                     Debug.Log("[PhaseArena] Victory worlds="+World+" environmentShare="+metrics.EnvironmentShare);
                 }
             }
             if(b.kind==BodyKind.Player)
             {
                 DeathCause=cause; State=RunState.Defeat; Time.timeScale=0; Message="整局结束："+cause;
+                Outcome.Begin();
                 Debug.Log("[PhaseArena] Defeat: "+cause);
             }
         }
 
         CollisionRules collisionRules;
+        ArenaPlayerLifecycle players;
+        RunOutcomePresentation outcome;
+        public ArenaPlayerLifecycle Players => players ?? (players=new ArenaPlayerLifecycle(this));
+        public RunOutcomePresentation Outcome => outcome ?? (outcome=new RunOutcomePresentation(this));
         WorldLawSimulation lawSimulation;
         public CollisionRules Collisions => collisionRules ?? (collisionRules=new CollisionRules(this));
         public WorldLawSimulation LawSimulation => lawSimulation ?? (lawSimulation=new WorldLawSimulation(this));
@@ -275,8 +311,8 @@ namespace PhaseArena
         ArenaTools tools;
         internal BodyRegistry Registry => registry;
         public ArenaTools Tools => tools ?? (tools=new ArenaTools(this));
-        public ThermoBody Shoot(ThermoBody caster,Vector2 direction,float heat) => Tools.Shoot(caster,direction,heat);
-        public Vector2 ProjectileSpawnPosition(ThermoBody caster,Vector2 direction) => Tools.ProjectileSpawnPosition(caster,direction);
+        public ThermoBody Shoot(ThermoBody caster,Vector2 direction,float heat,float stoneCharge=0) => Tools.Shoot(caster,direction,heat,stoneCharge);
+        public Vector2 ProjectileSpawnPosition(ThermoBody caster,Vector2 direction,float stoneCharge=0) => Tools.ProjectileSpawnPosition(caster,direction,stoneCharge);
         public bool TryGetProjectileSpawnPosition(ThermoBody caster,Vector2 direction,out Vector2 position) => Tools.TryGetProjectileSpawnPosition(caster,direction,out position);
         public void CreateShields(ThermoBody caster) => Tools.CreateShields(caster);
         public ThermoBody Melee(ThermoBody caster,Vector2 direction) => Tools.Melee(caster,direction);

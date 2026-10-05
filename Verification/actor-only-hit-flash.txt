@@ -1,0 +1,7 @@
+failures=0
+PASS Rock color=RGBA(0.400, 0.600, 0.300, 1.000)
+PASS Tree color=RGBA(0.400, 0.600, 0.300, 1.000)
+PASS Projectile color=RGBA(0.400, 0.600, 0.300, 1.000)
+PASS Enemy color=RGBA(1.000, 1.000, 1.000, 1.000)
+PASS Boss color=RGBA(1.000, 1.000, 1.000, 1.000)
+PASS Player retains matched damage flash and invulnerability

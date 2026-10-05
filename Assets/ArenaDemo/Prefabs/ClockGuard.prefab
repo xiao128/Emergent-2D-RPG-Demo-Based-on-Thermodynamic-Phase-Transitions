@@ -179,6 +179,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   guarding: 0
+  ranged: 0
+  archetype: 3
+  lungeImpulseOverride: -1
+  experienceReward: 40
 --- !u!114 &6723533754941804949
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -200,6 +204,11 @@ MonoBehaviour:
   - {fileID: 4779437395326951031, guid: 77ae2e93d11ff74439bd849048b823d3, type: 3}
   visual: {fileID: 5588341750374614575}
   body: {fileID: 5864164680109139521}
+  directionalFrames: []
+  directionalOffsets: []
+  directionalWalkFrames: []
+  walkFrameOffsets: []
+  walkFramesPerSecond: 8
 --- !u!1 &4835806980149427319
 GameObject:
   m_ObjectHideFlags: 0

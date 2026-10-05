@@ -272,7 +272,7 @@ public static partial class ArenaDemoBuilder
         var title=Panel("Title Card",hud.titlePanel.transform,Vector2.one*.5f,Vector2.one*.5f,Vector2.zero,new Vector2(860,490),dark);
         Label("Eyebrow",title,"THERMODYNAMIC ROGUELITE  /  玩法原型",new Vector2(0,180),new Vector2(800,40),19,gold);
         Label("Title",title,"相 变 试 炼",new Vector2(0,105),new Vector2(780,90),55,pale);
-        Label("Description",title,"冰与火改变温度，温度改变质量，碰撞引发连锁反应。\n\n三波怪物 → 世界钟三次改写法则 → 击败魔王\n左键火焰 · 右键冰霜 · 空格护盾 · F 法杖\nWASD 移动 · 波间靠近世界钟按 E",new Vector2(0,-35),new Vector2(760,200),23,new Color(.72f,.82f,.86f));
+        Label("Description",title,"冰与火改变温度，碰撞与世界法则引发连锁反应。\n\n八周目探索 → 世界钟改写法则 → 击败魔王\n左键火焰 · 右键冰霜 · 空格恢复 · F 法杖\nWASD 移动 · 靠近世界钟按 E",new Vector2(0,-35),new Vector2(760,200),23,new Color(.72f,.82f,.86f));
         hud.startButton=Button("Start Trial",title,"开始试炼",new Vector2(0,-185),new Vector2(260,65),gold);
 
         hud.upgradePanel=Overlay("World Clock Choices",root);

@@ -22,14 +22,20 @@ MonoBehaviour:
   aggroRadius: 6
   leashRadius: 10
   guardHealth: 60
-  bossHealth: 120
+  bossHealth: 100
   rockHealth: 360
   playerHealth: 100
-  playerHealthGrowth: 1.25
   enemyHealthGrowth: 1.55
+  playerHealthGrowth: 1.25
   lightHealth: 18
   mediumHealth: 28
   heavyHealth: 42
+  experienceGainMultiplier: 1
+  firstLevelExperience: 100
+  experienceIncreasePerLevel: 25
+  healthGainPerLevel: 15
+  manaGainPerLevel: 10
+  resultDisplayDelay: 5
   edgeInset: 8
   riverCenterY: 10
   riverWidth: 4
@@ -39,6 +45,8 @@ MonoBehaviour:
   spellImpulse: 6
   projectileHealth: 160
   projectileChargeDuration: 0.3
+  stoneFullChargeDuration: 2
+  stoneMaximumRockScale: 1.2
   maximumProjectiles: 250
   castCooldown: 0.65
   shieldRadius: 1.15
@@ -47,16 +55,48 @@ MonoBehaviour:
   staffCooldown: 0.65
   shieldRepelSpeed: 6.5
   shieldFormationDelay: 0.28
-  enemyWindup: 0.85
+  recoveryCooldown: 7
+  recoveryHealthFraction: 0.2
+  enemyAttackSpeedMultiplier: 1.75
+  enemyWindup: 1
   enemyAttackCooldown: 3.5
   enemyRecovery: 1.2
   enemyLungeImpulse: 12
   guardLungeImpulse: 20
   bossLungeImpulse: 36
+  enemyLungeSpeed: 30
+  guardLungeSpeed: 34
+  bossLungeSpeed: 38
+  lightAttackImpulse: 24
+  mediumAttackImpulse: 54
+  heavyAttackImpulse: 120
+  guardAttackImpulse: 136
+  bossAttackImpulse: 228
+  enemyLungeDuration: 0.8
+  attackReachSafety: 0.9
+  enemyAlertHysteresis: 1
+  enemyStandOffFraction: 0.75
+  enemyProjectileImpulse: 24
+  rangedAttackRange: 9
+  bossBaseMass: 8
+  bossMoveSpeed: 2
+  bossDriveForce: 40
+  bossWindup: 1.1
+  bossAttackCooldown: 3.5
+  bossRecovery: 1.2
+  bossProjectileImpulse: 48
+  bossAggroRadius: 60
+  bossVolleyInterval: 3
+  bossRadialProjectiles: 8
+  bossSummonInterval: 20
+  bossSummonDistance: 3
+  hotEnemyTemperature: 80
+  hotEnemyAttackMultiplier: 1.5
   impactAlpha: 0.2
   impactBeta: 2
-  impactThreshold: 1.8
+  impactThreshold: 6.1
   impactDamageCap: 2000
+  impactHeatThreshold: 1.8
   rockSpeedLimit: 240
   actorSpeedLimit: 60
   spellSpeedLimit: 160
@@ -75,7 +115,10 @@ MonoBehaviour:
   arcDamagePerDegreeMass: 0.65
   impactHeatFraction: 0.45
   impactTemperatureGain: 8
-  abrasionPerMeter: 0.1
+  frictionHeatGain: 0.09
+  abrasionSpeedThreshold: 8
+  abrasionHotTemperature: 40
+  abrasionPerMeter: 0.15
   minimumMassFraction: 0.1
   fissionMass: 0.3
   fissionSpeed: 10
@@ -85,13 +128,27 @@ MonoBehaviour:
   vaporImpulse: 30
   gravityRadius: 8
   gravityForce: 30
+  gravityMassThreshold: 3
+  gravityColdTemperature: -10
   gravityDensityThreshold: 12
+  thermalRadiationRadius: 2.4
+  expandedRadiationMultiplier: 1.5
+  burnTemperature: 80
+  frostTemperature: -50
+  burnInterval: 0.5
+  burnDamage: 2
+  frostInterval: 2
+  frostDamage: 6
   steamHotThreshold: 100
   steamCoolingThreshold: 60
   steamWaveRadius: 3
   steamWaveImpulse: 18
   steamWaveCooldown: 0.5
   crowdingItemThreshold: 6
+  crowdingRadius: 2.5
+  crowdingCheckInterval: 1
+  crowdingRingWidth: 0.06
+  crowdingRingColor: {r: 1, g: 0.58, b: 0.15, a: 0.9}
   crowdingDamagePerExcessPerSecond: 3
   repulsionTemperatureGap: 80
   repulsionRange: 0.6

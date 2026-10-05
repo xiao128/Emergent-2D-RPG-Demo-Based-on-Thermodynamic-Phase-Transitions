@@ -1,0 +1,48 @@
+failures=0
+PASS Both new laws enter random catalog
+PASS Random pool has 14 laws, retaining all retired exclusions
+PASS Small dense cold ball no longer generates gravity
+PASS Fully charged hot stone does not generate gravity
+MEASURE fullStoneMass=3.1 targetVelocity=(0.00, 0.00)
+PASS Fully charged cold stone attracts warm target
+PASS Mass exactly at threshold does not attract even when cold
+PASS Below mass threshold cannot attract
+PASS Temperature exactly at cold threshold does not qualify
+PASS Mass above threshold and temperature below threshold qualifies
+PASS Public cold threshold applies immediately
+PASS Warming a gravity source disables attraction immediately
+PASS Cold heavy monsters use the same gravity source rule
+PASS Baseline thermal range does not reach body three units away
+PASS Expanded 3.6-unit heat exchange reaches across two grid cells
+PASS Visible radiation ring is exactly 1.5 times baseline
+PASS Repeated updates do not compound ring size
+PASS Removing radiation law restores baseline ring
+PASS Tree radiation and thermal expansion compose once even on first render
+PASS Hot enemy windup is faster and still visibly telegraphed
+PASS Hot enemy attack cooldown accelerates equally
+PASS Cooling enemy to ambient restores normal attack speed
+PASS Space recovery restores configured fraction of maximum HP and normal temperature
+PASS Recovery has seven-second cooldown and no mana cost
+PASS Cleanse creates neither steam wave nor shields
+PASS Cleanse also removes accumulated burn exposure
+PASS Recovery clamps at full HP and clears cold state
+PASS Recovery scales with upgraded maximum HP
+PASS Without injury law hot player neither loses HP nor flashes
+PASS Without injury law cold player takes no temperature damage
+PASS Thermal exposure waits for first tick instead of micro damage every update
+PASS Burn applies 2 HP at 0.5 seconds with matched hit feedback
+PASS Burn flash ends between damage ticks
+PASS Burn repeats at one second while frost still waits
+PASS Two seconds: burn totals 8 HP, frost delivers one 6 HP tick
+MEASURE burnHp=92 frostHp=994
+PASS Projectile participates in thermal injury
+PASS Projectile also participates in frost injury
+PASS Rock participates in thermal injury
+PASS Rock also participates in frost injury
+PASS Tree participates in thermal injury
+PASS Tree also participates in frost injury
+PASS Enemy participates in thermal injury
+PASS Enemy also participates in frost injury
+PASS Boss participates in thermal injury
+PASS Boss also participates in frost injury
+PASS Indestructible obstacles remain indestructible

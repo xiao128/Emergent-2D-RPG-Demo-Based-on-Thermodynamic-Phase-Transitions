@@ -1,6 +1,15 @@
 using UnityEngine;
 namespace PhaseArena
 {
+    public enum EnemyArchetype
+    {
+        [InspectorName("小怪")] Light,
+        [InspectorName("中怪")] Medium,
+        [InspectorName("大怪")] Heavy,
+        [InspectorName("守卫")] Guard,
+        [InspectorName("远程怪")] Ranged,
+        [InspectorName("Boss")] Boss
+    }
     [RequireComponent(typeof(ThermoBody))]
     public class EnemyBrain : MonoBehaviour
     {
@@ -13,36 +22,72 @@ namespace PhaseArena
         public Vector3 BaseVisualScale => visualScale;
         public bool guarding;
         public bool ranged;
+        [Header("怪物类型与单独覆盖")]
+        [Tooltip("选择对应的全局冲量配置；修改质量不会改变怪物的类型。")]
+        public EnemyArchetype archetype=EnemyArchetype.Medium;
+        [Min(-1), Tooltip("-1 使用 WorldTuning 的对应类型冲量；非负值直接覆盖此怪物的冲量。")]
+        public float lungeImpulseOverride=-1;
+        [Min(0), Tooltip("此怪物击杀的基础经验，再乘全局 Experience Gain Multiplier。")]
+        public int experienceReward=20;
         public int Throws { get; private set; }
         ThermoBody self;
-        float wanderAt,shotAt,chargeAt,chargeUntil,chargeStarted,recoveryUntil;
+        float wanderAt,chargeAt,chargeUntil,chargeStarted,recoveryUntil,lungeUntil;
         Vector2 wanderTarget,chargeDirection;
         Vector3 visualScale;
         System.Random wanderRandom;
         LineRenderer warning;
+        public float LungeImpulse => EnemyAttackPhysics.LungeImpulse(self,ArenaDirector.Instance.tuning);
+        public float AttackReach => EnemyAttackPhysics.AttackReach(self,ArenaDirector.Instance.player,ArenaDirector.Instance,ranged);
+        public bool IsLunging => !self.Dead && Time.time<lungeUntil;
+        void ApplyBossTuning(ArenaDirector g)
+        {
+            if(g==null || self.kind!=BodyKind.Boss) return;
+            self.topSpeed=Mathf.Max(0,g.tuning.bossMoveSpeed); self.driveForce=Mathf.Max(0,g.tuning.bossDriveForce);
+            float mass=Mathf.Max(.0001f,g.tuning.bossBaseMass);
+            if(!Mathf.Approximately(self.baseMass,mass)) {self.baseMass=mass; self.ThermalStep(0);}
+        }
+        float RecoveryTime(ArenaDirector g) => AttackTime(self.kind==BodyKind.Boss ? g.tuning.bossRecovery : g.tuning.enemyRecovery);
+        public float TemperatureAttackMultiplier
+        {
+            get
+            {
+                var g=ArenaDirector.Instance;
+                return g!=null && self!=null && self.temperature>g.tuning.hotEnemyTemperature
+                    ? Mathf.Max(1,g.tuning.hotEnemyAttackMultiplier) : 1;
+            }
+        }
+        float AttackTime(float duration)
+        {
+            var g=ArenaDirector.Instance;
+            return (g!=null ? g.tuning.EnemyAttackTime(duration) : duration/ArenaTuning.EnemyAttackSpeedMultiplier)/TemperatureAttackMultiplier;
+        }
         void Awake()
         {
             self=GetComponent<ThermoBody>();
             if(self.visual!=null) visualScale=self.visual.transform.localScale;
+            if(self.kind==BodyKind.Boss && GetComponent<BossCombat>()==null) gameObject.AddComponent<BossCombat>();
             SetHome(transform.position,false);
         }
         public void SetHome(Vector2 home,bool guard)
         {
             Home=home; guarding=guard; Alert=false; wanderTarget=home;
             wanderRandom=new System.Random(GetInstanceID()); wanderAt=Time.time+1;
-            shotAt=Time.time+4; chargeAt=Time.time+1; chargeUntil=0; recoveryUntil=0;
+            chargeAt=Time.time+AttackTime(1); chargeUntil=0; recoveryUntil=0; lungeUntil=0;
+            ApplyBossTuning(ArenaDirector.Instance);
+            var boss=GetComponent<BossCombat>(); if(boss!=null) boss.ResetTimers();
         }
         public void InterruptAttack(float recovery)
         {
             chargeUntil=0; recoveryUntil=Mathf.Max(recoveryUntil,Time.time+recovery);
-            chargeAt=Mathf.Max(chargeAt,recoveryUntil+.4f);
+            lungeUntil=0;
+            chargeAt=Mathf.Max(chargeAt,recoveryUntil+AttackTime(.4f));
             if(warning!=null) warning.enabled=false;
         }
         void BeginAttack(Vector2 direction,ArenaDirector game)
         {
             chargeDirection=direction.normalized; chargeStarted=Time.time;
-            chargeUntil=Time.time+(self.kind==BodyKind.Boss ? 1.1f : game.tuning.enemyWindup);
-            chargeAt=chargeUntil+game.tuning.enemyAttackCooldown;
+            chargeUntil=Time.time+AttackTime(self.kind==BodyKind.Boss ? game.tuning.bossWindup : game.tuning.enemyWindup);
+            chargeAt=chargeUntil+AttackTime(self.kind==BodyKind.Boss ? game.tuning.bossAttackCooldown : game.tuning.enemyAttackCooldown);
             Windups++;
             if(warning==null)
             {
@@ -58,15 +103,16 @@ namespace PhaseArena
         {
             var g=ArenaDirector.Instance;
             if(g==null || !g.CombatActive || self.Dead || g.player==null || g.player.Dead) return;
+            ApplyBossTuning(g);
             if(Time.time<recoveryUntil) return; // No AI force cancels a physical knockback.
             if(chargeUntil>0)
             {
                 if(self.Body.velocity.magnitude>Mathf.Max(3.5f,self.topSpeed*1.7f))
                 {
-                    InterruptAttack(g.tuning.enemyRecovery); return;
+                    InterruptAttack(RecoveryTime(g)); return;
                 }
                 warning.SetPosition(0,self.Body.position);
-                warning.SetPosition(1,self.Body.position+chargeDirection*(self.kind==BodyKind.Boss ? 6 : 4));
+                warning.SetPosition(1,self.Body.position+chargeDirection*AttackReach);
                 if(Time.time<chargeUntil)
                 {
                     self.ApplyForce(-self.Body.velocity*self.Mass*6);
@@ -76,41 +122,39 @@ namespace PhaseArena
                 if(ranged)
                 {
                     g.Shoot(self,chargeDirection,Throws%2==0 ? 105 : -95);
-                    Throws++; recoveryUntil=Time.time+g.tuning.enemyRecovery; return;
+                    Throws++; recoveryUntil=Time.time+RecoveryTime(g); return;
                 }
-                float impulse=self.kind==BodyKind.Boss ? g.tuning.bossLungeImpulse
-                    : self.isElite ? g.tuning.guardLungeImpulse : g.tuning.enemyLungeImpulse;
-                self.ApplyForce(chargeDirection*impulse,ForceMode2D.Impulse);
-                recoveryUntil=Time.time+g.tuning.enemyRecovery;
+                self.ApplyForce(chargeDirection*LungeImpulse,ForceMode2D.Impulse);
+                if(ArenaAudio.Instance!=null) ArenaAudio.Instance.PlayCharge(self,archetype);
+                lungeUntil=Time.time+Mathf.Max(.02f,g.tuning.enemyLungeDuration);
+                recoveryUntil=Time.time+Mathf.Max(g.tuning.enemyLungeDuration,RecoveryTime(g));
                 return;
             }
             Vector2 toPlayer=g.player.Body.position-self.Body.position;
             float distance=toPlayer.magnitude,homeDistance=Vector2.Distance(self.Body.position,Home);
             float leash=guarding ? 8 : g.tuning.leashRadius;
-            if(distance<g.tuning.aggroRadius && homeDistance<leash) Alert=true;
-            if(distance>g.tuning.aggroRadius+3 || homeDistance>leash) Alert=false;
+            float attackRange=AttackReach;
+            if(self.kind==BodyKind.Boss)
+            {
+                if(distance<=g.tuning.bossAggroRadius) Alert=true;
+                // Once acquired, the boss keeps pursuing across the arena.
+            }
+            else
+            {
+                if(distance<=attackRange && homeDistance<leash) Alert=true;
+                if(distance>attackRange+g.tuning.enemyAlertHysteresis || homeDistance>leash) Alert=false;
+            }
             Vector2 destination=Home;
             if(Alert)
             {
-                float impulse=self.kind==BodyKind.Boss ? g.tuning.bossLungeImpulse
-                    : self.isElite ? g.tuning.guardLungeImpulse : g.tuning.enemyLungeImpulse;
-                float attackRange=Mathf.Clamp(self.radius+g.player.radius+
-                    impulse*g.ForceMultiplier/(self.Mass*Mathf.Max(.1f,self.Body.drag))*.45f,
-                    self.radius+g.player.radius+.35f,4.2f);
-                if(ranged) attackRange=5;
-                if(self.kind==BodyKind.Boss && Time.time>shotAt)
-                {
-                    shotAt=Time.time+5;
-                    for(int i=0;i<8;i++) g.Shoot(self,new Vector2(Mathf.Cos(i*Mathf.PI/4),Mathf.Sin(i*Mathf.PI/4)),i%2==0 ? 105 : -95);
-                    g.Pulse(self.Body.position,new Color(1,.4f,.2f),2);
-                }
-                if(Time.time>chargeAt && distance<(ranged ? g.tuning.aggroRadius : attackRange+.2f) && distance>self.radius+g.player.radius+.3f)
+                if(Time.time>chargeAt && distance<=attackRange && distance>self.radius+g.player.radius+.3f)
                 {
                     BeginAttack(toPlayer,g); return;
                 }
-                // Approach the attack distance; during cooldown leave breathing room.
-                destination=distance>attackRange ? g.player.Body.position
-                    : self.Body.position-toPlayer.normalized*(attackRange-distance);
+                float standOff=attackRange*Mathf.Clamp(g.tuning.enemyStandOffFraction,.1f,1);
+                // Stay inside our own reach instead of retreating to its outer boundary.
+                destination=distance>standOff ? g.player.Body.position
+                    : self.Body.position-toPlayer.normalized*(standOff-distance);
             }
             else if(homeDistance<leash*.8f)
             {

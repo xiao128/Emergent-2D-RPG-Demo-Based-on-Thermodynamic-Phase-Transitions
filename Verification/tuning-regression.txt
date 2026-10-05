@@ -1,0 +1,30 @@
+failures=0
+PASS Actual light-monster death grants double its ten base XP
+PASS Half-point XP is retained instead of rounded up per kill
+PASS Two half-point awards accumulate into one real XP
+PASS Zero XP multiplier disables XP gain
+PASS Custom thresholds 25 then 50 award two levels and carry five XP
+PASS Custom per-level health and mana gains update maxima and current pools
+PASS Run reset also clears fractional XP carry
+PASS Invalid level requirement is clamped away from infinite leveling
+PASS Heavy prefab retains its explicit archetype
+PASS Lower global heavy impulse directly reduces impulse and reach despite old hidden floors
+PASS Actual heavy launch uses twelve impulse / four mass = three speed
+PASS Single enemy override changes actual launch independently of global setting
+PASS Global zero impulse is honored rather than forced up by a speed floor
+PASS Changing mass keeps enemy type and configured impulse unchanged
+PASS Editable global attack-speed multiplier changes actual windup
+PASS RangedSlime independently configurable projectile impulse reaches actual body
+PASS DemonKing independently configurable projectile impulse reaches actual body
+PASS experienceGainMultiplier is public and Inspector-serialized
+PASS firstLevelExperience is public and Inspector-serialized
+PASS experienceIncreasePerLevel is public and Inspector-serialized
+PASS healthGainPerLevel is public and Inspector-serialized
+PASS manaGainPerLevel is public and Inspector-serialized
+PASS lightAttackImpulse is public and Inspector-serialized
+PASS mediumAttackImpulse is public and Inspector-serialized
+PASS heavyAttackImpulse is public and Inspector-serialized
+PASS guardAttackImpulse is public and Inspector-serialized
+PASS bossAttackImpulse is public and Inspector-serialized
+PASS bossProjectileImpulse is public and Inspector-serialized
+PASS enemyAttackSpeedMultiplier is public and Inspector-serialized

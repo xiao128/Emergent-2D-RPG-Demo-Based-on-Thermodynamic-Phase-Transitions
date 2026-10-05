@@ -1,0 +1,9 @@
+Play=False
+Scene=Assets/Scenes/PhaseArenaDemo.unity
+MissingScripts=0
+ResultDisplayDelay=5
+CrowdingRadius=2.5
+CrowdingCheckInterval=1
+CrowdingRingWidth=0.06
+RootObjects=Main Camera,Main Light,Arena,ArenaDirector,Runtime Entities,PlayerMage,Aim Cursor,Arena HUD,EventSystem,Arena Audio
+PlayerPresent=True

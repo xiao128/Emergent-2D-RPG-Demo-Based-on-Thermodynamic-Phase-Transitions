@@ -1,0 +1,9 @@
+Play=False
+Scene=Assets/Scenes/PhaseArenaDemo.unity
+Dirty=False
+MissingScripts=0
+Selected=Assets/ArenaDemo/WorldTuning.asset
+RecoveryFraction=0.2
+GravityColdTemperature=-10
+GravityMassThreshold=3
+FontMode=Static

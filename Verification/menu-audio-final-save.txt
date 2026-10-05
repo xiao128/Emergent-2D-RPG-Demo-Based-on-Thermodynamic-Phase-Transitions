@@ -1,0 +1,10 @@
+Play=False
+scene=Assets/Scenes/PhaseArenaDemo.unity
+missingScripts=0
+menuButtons=3
+settingsSliders=2
+menuAudioAssigned=True
+startLabel=开始游戏
+musicImport=Streaming
+background=MainMenuBackground
+settingsReferences=True

@@ -1,0 +1,49 @@
+failures=0
+PASS LightSlime launch impulse increases with size/tier
+PASS LightSlime estimated charge covers at least 4.8 units on grass
+PASS LightSlime telegraph matches actual attack reach
+PASS LightSlime actual AI emits configured launch impulse
+PASS LightSlime actual physical charge matches prediction
+MEASURE LightSlime mass=0.8 impulse=24 speed=30 distance=6.454412 predicted=6.454416
+PASS MediumSlime launch impulse increases with size/tier
+PASS MediumSlime estimated charge covers at least 4.8 units on grass
+PASS MediumSlime telegraph matches actual attack reach
+PASS MediumSlime actual AI emits configured launch impulse
+PASS MediumSlime actual physical charge matches prediction
+MEASURE MediumSlime mass=1.8 impulse=54 speed=30 distance=6.454412 predicted=6.454416
+PASS HeavySlime launch impulse increases with size/tier
+PASS HeavySlime estimated charge covers at least 4.8 units on grass
+PASS HeavySlime telegraph matches actual attack reach
+PASS HeavySlime actual AI emits configured launch impulse
+PASS HeavySlime actual physical charge matches prediction
+MEASURE HeavySlime mass=4 impulse=120 speed=30 distance=6.454412 predicted=6.454416
+PASS ClockGuard launch impulse increases with size/tier
+PASS ClockGuard estimated charge covers at least 4.8 units on grass
+PASS ClockGuard telegraph matches actual attack reach
+PASS ClockGuard actual AI emits configured launch impulse
+PASS ClockGuard actual physical charge matches prediction
+MEASURE ClockGuard mass=4 impulse=136 speed=34 distance=7.315004 predicted=7.315005
+PASS DemonKing launch impulse increases with size/tier
+PASS DemonKing estimated charge covers at least 4.8 units on grass
+PASS DemonKing telegraph matches actual attack reach
+PASS DemonKing actual AI emits configured launch impulse
+PASS DemonKing actual physical charge matches prediction
+MEASURE DemonKing mass=6 impulse=228 speed=38 distance=8.148376 predicted=8.175594
+PASS Fresh enemy estimates range from ground friction before its first physics update
+PASS Heavy enemy also charges nearly five units across rough terrain
+MEASURE roughHeavyDistance=4.946267 predicted=4.946266
+PASS Heavy enemy is no longer limited to old 4.2-unit attack range
+PASS Target outside physical charge reach is not acquired
+PASS Target inside physical charge reach is acquired and telegraphed
+PASS Charge from near the attack boundary actually reaches, damages and pushes player
+MEASURE boundaryHitDamage=14.35059 playerVelocity=0.487444
+PASS Cooldown movement approaches inner attack window instead of retreating to outer range
+PASS Reach expands when law actually reduces ground friction
+PASS Normal ranged projectile receives 24 physical impulse
+PASS Normal ranged projectile remains fast after half a second
+MEASURE ranged stone=False distance0.5=10.31431 speed0.5=17.81143
+PASS Stone ranged projectile receives 24 physical impulse
+PASS Stone ranged projectile remains fast after half a second
+MEASURE ranged stone=True distance0.5=9.823155 speed0.5=16.96327
+PASS Ranged enemy uses its configured firing range
+PASS Player projectile still spawns stationary for manual F launch

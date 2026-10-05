@@ -1,0 +1,13 @@
+failures=0
+PASS Exactly four temperature edge lines
+PASS Extreme heat turns all four edges red without injury law
+PASS Extreme cold turns all four edges blue
+PASS Vertical and horizontal edges are exactly two screen pixels
+PASS Temperature edges cannot intercept clicks
+PASS Normal interval/boundary 20 hides temperature edges
+PASS Normal interval/boundary 80 hides temperature edges
+PASS Normal interval/boundary -50 hides temperature edges
+PASS Low-health damage edge and hot line coexist
+PASS Space cleanse removes the temperature edge
+PASS Death hides the temperature edge
+PASS New recovery and law text glyphs are baked

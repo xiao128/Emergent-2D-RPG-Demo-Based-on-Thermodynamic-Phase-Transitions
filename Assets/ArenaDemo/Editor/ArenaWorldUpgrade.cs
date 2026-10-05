@@ -136,7 +136,7 @@ public static partial class ArenaDemoBuilder
         {
             var panel=Panel("World Map",root,new Vector2(1,1),new Vector2(1,1),new Vector2(-30,-92),new Vector2(260,260),dark);
             panel.SetSiblingIndex(hud.titlePanel.transform.GetSiblingIndex());
-            Label("Map Title",panel,"世界地图 · 金色为世界钟",new Vector2(0,110),new Vector2(245,26),16,gold);
+            Label("Map Title",panel,"世界地图 · 金色菱形为碎片",new Vector2(0,110),new Vector2(245,26),16,gold);
             var raw=new GameObject("Map Surface",typeof(RectTransform),typeof(UnityEngine.UI.RawImage));
             raw.transform.SetParent(panel,false); var rt=raw.GetComponent<RectTransform>(); rt.sizeDelta=new Vector2(240,186); rt.anchoredPosition=new Vector2(0,-1);
             raw.GetComponent<UnityEngine.UI.RawImage>().raycastTarget=false;

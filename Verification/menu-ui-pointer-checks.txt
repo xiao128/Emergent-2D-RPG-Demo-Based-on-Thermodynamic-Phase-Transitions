@@ -1,0 +1,7 @@
+PASS Pointer raycast clicks Start Trial and begins world
+PASS Grass walking plays grass footsteps
+PASS Frozen river walking plays ice footsteps (whole-river fixture)
+PASS Slider pointer click changes volume to 25%
+PASS Slider pointer drag changes source volume to 75%
+PASS Slider row is pointer raycast target
+PASS Quit button pointer click exits Editor Play mode

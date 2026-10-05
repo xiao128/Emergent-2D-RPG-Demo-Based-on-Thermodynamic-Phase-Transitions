@@ -1,0 +1,34 @@
+failures=0
+PASS Charge 0 remains a movable visual-only preview
+PASS Charge 0 releases successfully
+PASS Charge 0 preview matches actual sprite and collider
+PASS Charge 0 spawns clear stationary stone and charges mana once
+PASS Charge 0 preserves fire temperature and heating
+PASS Charge 0 stone can be kicked by F
+PASS Charge 0.5 remains a movable visual-only preview
+PASS Charge 0.5 releases successfully
+PASS Charge 0.5 preview matches actual sprite and collider
+PASS Charge 0.5 spawns clear stationary stone and charges mana once
+PASS Charge 0.5 increases physical mass with 2D area
+PASS Charge 0.5 preserves fire temperature and heating
+PASS Charge 0.5 stone can be kicked by F
+PASS Charge 1 remains a movable visual-only preview
+PASS Charge 1 releases successfully
+PASS Charge 1 preview matches actual sprite and collider
+PASS Charge 1 spawns clear stationary stone and charges mana once
+PASS Charge 1 increases physical mass with 2D area
+PASS Charge 1 caps size at configured 1.5 times standard rock
+PASS Charge 1 preserves fire temperature and heating
+PASS Charge 1 stone can be kicked by F
+PASS Charge 2 remains a movable visual-only preview
+PASS Charge 2 releases successfully
+PASS Charge 2 preview matches actual sprite and collider
+PASS Charge 2 spawns clear stationary stone and charges mana once
+PASS Charge 2 increases physical mass with 2D area
+PASS Charge 2 caps size at configured 1.5 times standard rock
+PASS Charge 2 preserves fire temperature and heating
+PASS Charge 2 stone can be kicked by F
+PASS Fully charged ice stone releases
+PASS Fully charged ice stone has same size and mass policy and retains cooling
+PASS Large stone cannot appear in narrow gap or spend mana on failed placement
+PASS Normal ice/fire spell size and mass are unchanged without stone law

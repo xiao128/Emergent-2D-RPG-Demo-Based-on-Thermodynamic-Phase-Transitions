@@ -1,0 +1,36 @@
+failures=0
+PASS Both laws independently available
+PASS Existing serialized law IDs preserved
+PASS Heating alone never erodes mass
+PASS Heating scales with friction coefficient
+PASS Ice prevents friction heating
+PASS One meter removes 15 percent remaining mass
+PASS Wear alone does not heat
+PASS Visual and collider shrink with square root mass
+PASS 2D occupied area follows remaining mass
+PASS Mass change preserves velocity
+PASS Repeated updates do not compound visual shrink
+PASS Lost mass stays lost when wear law removed
+PASS Reset restores original geometry and mass
+PASS Speed threshold: 6
+PASS Speed threshold: 8
+PASS Speed threshold: 8.01
+PASS Temperature threshold: 20
+PASS Temperature threshold: 40
+PASS Temperature threshold: 40.01
+PASS Already hot object still wears while sliding on ice
+PASS Wear independent of simulation step subdivision
+PASS Live tuning speed threshold honored
+PASS Live tuning heat threshold honored
+PASS Live tuning erosion rate honored
+PASS Shared erosion applies to Player
+PASS Shared erosion applies to Enemy
+PASS Shared erosion applies to Boss
+PASS Shared erosion applies to Rock
+PASS Shared erosion applies to Projectile
+PASS Immovable obstacles do not wear
+PASS Zero duration does not wear
+PASS Half-health player walking at speed 6 survives both laws without erosion
+PASS Thermal expansion composes with permanent wear
+PASS Removing expansion retains worn geometry
+PASS Below minimum mass disappears rather than ignoring actors

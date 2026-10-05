@@ -17,6 +17,23 @@ namespace PhaseArena
         Sprite fireSprite => world.fireSprite;
         Sprite iceSprite => world.iceSprite;
         RunMetrics metrics => world.metrics;
+        public bool UsesStoneMagic(ThermoBody caster) => world.Has(WorldLaw.StoneMagic) && (caster.kind==BodyKind.Player || caster.kind==BodyKind.Enemy);
+        public Sprite ProjectileSprite(ThermoBody caster,float heat) => UsesStoneMagic(caster) ? world.worldGenerator.rockPrefab.visual.sprite : heat>0 ? fireSprite : iceSprite;
+        public ProjectileProfile Profile(ThermoBody caster,float stoneCharge=0)
+        {
+            if(UsesStoneMagic(caster))
+            {
+                var rock=world.worldGenerator.rockPrefab;
+                float scale=Mathf.Lerp(1,Mathf.Max(1,WorldLayout.TypicalRockScale*tuning.stoneMaximumRockScale),Mathf.Clamp01(stoneCharge));
+                var visualScale=rock.visual.transform.lossyScale;
+                var size=rock.visual.sprite.bounds.size;
+                return new ProjectileProfile(rock.radius*scale,rock.baseMass*scale*scale,
+                    new Vector2(size.x*Mathf.Abs(visualScale.x),size.y*Mathf.Abs(visualScale.y))*scale);
+            }
+            var circle=projectilePrefab.GetComponent<CircleCollider2D>();
+            float radius=circle!=null ? circle.radius*Mathf.Max(Mathf.Abs(projectilePrefab.transform.lossyScale.x),Mathf.Abs(projectilePrefab.transform.lossyScale.y)) : projectilePrefab.radius;
+            return new ProjectileProfile(radius,tuning.spellMass,Vector2.one*radius*2);
+        }
         RaycastHit2D[] spawnHits=new RaycastHit2D[32];
         int CastSpawnPath(Vector2 origin,float radius,Vector2 direction,float distance)
         {
@@ -29,12 +46,13 @@ namespace PhaseArena
         }
         void Pulse(Vector2 p,Color c,float radius,float duration=.45f) => world.Pulse(p,c,radius,duration);
         void Feedback(Vector2 p,string s,Color c) => world.Feedback(p,s,c);
-        public ThermoBody Shoot(ThermoBody caster,Vector2 direction,float heat)
+        public ThermoBody Shoot(ThermoBody caster,Vector2 direction,float heat,float stoneCharge=0)
         {
             if(!world.SimulationActive || direction.sqrMagnitude<.01f) return null;
             direction.Normalize();
+            var profile=Profile(caster,stoneCharge);
             Vector2 spawn;
-            if(!TryGetProjectileSpawnPosition(caster,direction,out spawn)) return null;
+            if(!TryGetProjectileSpawnPosition(caster,direction,out spawn,profile.Radius)) return null;
             // Registration order is creation order. Both sides share the FIFO cap.
             while(registry.ProjectileCount>=Mathf.Max(1,tuning.maximumProjectiles))
             {
@@ -43,27 +61,43 @@ namespace PhaseArena
             }
             var shot=UnityEngine.Object.Instantiate(projectilePrefab,spawn,Quaternion.identity,entities);
             shot.gameObject.layer=8;
-            shot.owner=caster; shot.shotHeat=heat; shot.temperature=heat>0 ? 150 : -120; shot.baseMass=tuning.spellMass;
+            bool stone=UsesStoneMagic(caster);
+            shot.owner=caster; shot.shotHeat=heat; shot.temperature=heat>0 ? 150 : -120; shot.baseMass=profile.Mass;
             shot.maxHealth=tuning.projectileHealth; shot.health=shot.maxHealth;
             shot.lifetime=0;
-            shot.visual.sprite=heat>0 ? fireSprite : iceSprite;
+            shot.visual.sprite=ProjectileSprite(caster,heat);
             shot.baseColor=heat>0 ? new Color(1,.75f,.35f) : new Color(.65f,.94f,1);
+            if(stone)
+            {
+                shot.radius=profile.Radius;
+                var rootScale=shot.transform.lossyScale;
+                shot.GetComponent<CircleCollider2D>().radius=profile.Radius/Mathf.Max(.01f,Mathf.Max(Mathf.Abs(rootScale.x),Mathf.Abs(rootScale.y)));
+                var size=shot.visual.sprite.bounds.size;
+                var parentScale=shot.visual.transform.parent.lossyScale;
+                shot.visual.transform.localScale=new Vector3(profile.VisualSize.x/Mathf.Max(.01f,size.x*Mathf.Abs(parentScale.x)),profile.VisualSize.y/Mathf.Max(.01f,size.y*Mathf.Abs(parentScale.y)),1);
+                float enlargement=profile.Radius/Mathf.Max(.01f,projectilePrefab.radius);
+                if(shot.heatRing!=null) shot.heatRing.transform.localScale*=enlargement;
+                shot.healthBarSize.x=profile.Radius*2/Mathf.Max(.01f,Mathf.Abs(rootScale.x));
+                var back=shot.transform.Find("Health Back");
+                if(back!=null) { var backScale=back.localScale; backScale.x=shot.healthBarSize.x; back.localScale=backScale; }
+            }
             shot.ThermalStep(0);
             Physics2D.IgnoreCollision(shot.GetComponent<Collider2D>(),caster.GetComponent<Collider2D>());
             foreach(var b in bodies) if(b!=null && b.kind==BodyKind.Shield && b.owner==caster) b.GetComponent<ShieldFollower>().AllowExit(shot);
             world.StartCoroutine(RestoreCasterCollision(shot,caster));
             shot.Body.velocity=Vector2.zero;
-            if(caster.kind!=BodyKind.Player) shot.ApplyForce(direction*tuning.spellImpulse,ForceMode2D.Impulse);
+            if(caster.kind!=BodyKind.Player) shot.ApplyForce(direction*(caster.kind==BodyKind.Boss ? tuning.bossProjectileImpulse : tuning.enemyProjectileImpulse),ForceMode2D.Impulse);
             metrics.shots++;
+            if(caster.kind!=BodyKind.Player && ArenaAudio.Instance!=null) ArenaAudio.Instance.PlayWorld(ArenaAudio.Instance.enemyShot,spawn,.6f);
             return shot;
         }
-        public Vector2 ProjectileSpawnPosition(ThermoBody caster,Vector2 direction)
+        public Vector2 ProjectileSpawnPosition(ThermoBody caster,Vector2 direction,float stoneCharge=0)
         {
             Vector2 position;
-            TryGetProjectileSpawnPosition(caster,direction,out position);
+            TryGetProjectileSpawnPosition(caster,direction,out position,Profile(caster,stoneCharge).Radius);
             return position;
         }
-        public bool TryGetProjectileSpawnPosition(ThermoBody caster,Vector2 direction,out Vector2 position)
+        public bool TryGetProjectileSpawnPosition(ThermoBody caster,Vector2 direction,out Vector2 position,float shotRadius=-1)
         {
             var bounds=caster.Collider.bounds;
             Vector2 origin=bounds.center;
@@ -74,10 +108,10 @@ namespace PhaseArena
             var circle=caster.Collider as CircleCollider2D;
             float casterExtent=circle!=null ? Mathf.Max(bounds.extents.x,bounds.extents.y)
                 : Mathf.Abs(direction.x)*bounds.extents.x+Mathf.Abs(direction.y)*bounds.extents.y;
-            var projectileCollider=projectilePrefab.GetComponent<CircleCollider2D>();
-            float shotRadius=projectileCollider!=null ? projectileCollider.radius*Mathf.Max(Mathf.Abs(projectilePrefab.transform.lossyScale.x),Mathf.Abs(projectilePrefab.transform.lossyScale.y)) : projectilePrefab.radius;
+            if(shotRadius<0) shotRadius=Profile(caster).Radius;
             float minimumDistance=casterExtent+shotRadius+.06f;
             float spawnDistance=minimumDistance+.12f;
+            position=origin+direction*spawnDistance; // Preview stays ahead even if creation is blocked.
             // Shorten against obstacles only while the ball still fits outside the caster.
             int hits=CastSpawnPath(origin,shotRadius,direction,spawnDistance);
             for(int i=0;i<hits;i++)

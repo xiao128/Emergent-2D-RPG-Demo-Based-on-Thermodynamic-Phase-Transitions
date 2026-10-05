@@ -1,0 +1,1 @@
+Cold stone cooling target: 20 -> -75; heat consumed=True
