@@ -1,0 +1,8 @@
+playing=False
+scene=Assets/Scenes/PhaseArenaDemo.unity
+rootObjects=10
+missingScripts=0
+worldCount=9
+wearMassPerMeter=0.2
+limits=-1000,1000
+playerPresent=True

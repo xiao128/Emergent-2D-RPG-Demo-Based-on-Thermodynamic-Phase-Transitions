@@ -40,7 +40,7 @@ namespace PhaseArena
             {
                 Check(WorldLawCatalog.IsAvailable(WorldLaw.ExpandedRadiation) && WorldLawCatalog.IsAvailable(WorldLaw.ThermalInjury),"Both new laws enter random catalog");
                 int count=0; foreach(WorldLaw law in Enum.GetValues(typeof(WorldLaw))) if(WorldLawCatalog.IsAvailable(law)) count++;
-                Check(count==14,"Random pool has 14 laws, retaining all retired exclusions");
+                Check(count==18,"Random pool has 18 laws, retaining all retired exclusions");
                 Gravity(); Clear();
                 Radiation(); Clear();
                 HotAttack(); Clear();
@@ -85,38 +85,17 @@ namespace PhaseArena
         void Gravity()
         {
             g.laws.Add(WorldLaw.Gravity);
-            var source=Fixture(new Vector2(-20,-20)); var target=Fixture(new Vector2(-16,-20));
-            source.temperature=-120; Physics2D.SyncTransforms(); g.LawSimulation.Tick(.1f);
-            Check(source.Density>g.tuning.gravityDensityThreshold && source.Mass<g.tuning.gravityMassThreshold && target.Body.velocity==Vector2.zero,"Small dense cold ball no longer generates gravity");
-            source.gameObject.SetActive(false); g.laws.Add(WorldLaw.StoneMagic);
-            var stone=g.Shoot(p,Vector2.right,105,1); fixtures.Add(stone);
-            // Authored charge size may be below the gravity threshold. This fixture
-            // verifies the temperature gate with a deliberately qualifying mass.
-            stone.baseMass=Mathf.Max(stone.baseMass,g.tuning.gravityMassThreshold+.1f); stone.ThermalStep(0);
-            stone.transform.position=new Vector2(-20,-20); stone.Body.position=stone.transform.position;
-            Physics2D.SyncTransforms(); g.LawSimulation.Tick(.1f);
-            Check(stone.Mass>g.tuning.gravityMassThreshold && target.Body.velocity==Vector2.zero,"Fully charged hot stone does not generate gravity");
-            results.Add("MEASURE fullStoneMass="+stone.Mass+" targetVelocity="+target.Body.velocity);
-            stone.temperature=-120; target.Body.velocity=Vector2.zero; g.LawSimulation.Tick(.1f);
-            Check(target.Body.velocity.x<0,"Fully charged cold stone attracts warm target");
-            stone.baseMass=g.tuning.gravityMassThreshold; stone.temperature=-120; target.Body.velocity=Vector2.zero; g.LawSimulation.Tick(.1f);
-            Check(target.Body.velocity==Vector2.zero,"Mass exactly at threshold does not attract even when cold");
-            stone.baseMass=g.tuning.gravityMassThreshold-.01f; target.Body.velocity=Vector2.zero; g.LawSimulation.Tick(.1f);
-            Check(target.Body.velocity==Vector2.zero,"Below mass threshold cannot attract");
-            stone.baseMass=g.tuning.gravityMassThreshold+.1f; stone.ThermalStep(0);
-            stone.temperature=g.tuning.gravityColdTemperature;
-            Check(!g.LawSimulation.IsGravitySource(stone),"Temperature exactly at cold threshold does not qualify");
-            stone.temperature=g.tuning.gravityColdTemperature-1;
-            Check(g.LawSimulation.IsGravitySource(stone),"Mass above threshold and temperature below threshold qualifies");
-            float coldLimit=g.tuning.gravityColdTemperature;
-            try {
-                g.tuning.gravityColdTemperature=stone.temperature-1;
-                Check(!g.LawSimulation.IsGravitySource(stone),"Public cold threshold applies immediately");
-            } finally { g.tuning.gravityColdTemperature=coldLimit; }
-            stone.temperature=20; target.Body.velocity=Vector2.zero; g.LawSimulation.Tick(.1f);
-            Check(target.Body.velocity==Vector2.zero,"Warming a gravity source disables attraction immediately");
-            stone.kind=BodyKind.Enemy; stone.temperature=-120; target.Body.velocity=Vector2.zero; g.LawSimulation.Tick(.1f);
-            Check(target.Body.velocity.x<0,"Cold heavy monsters use the same gravity source rule");
+            var source=Fixture(new Vector2(-20,-20)); var target=Fixture(new Vector2(-18,-20));
+            source.temperature=-120; Physics2D.SyncTransforms(); g.LawSimulation.Tick(0); g.FlowFields.TickSource(source,.1f);
+            Check(target.Body.velocity.x<0,"Small cold source creates inward convection without old mass gate");
+            target.Body.velocity=Vector2.zero; source.temperature=150; g.FlowFields.TickSource(source,.1f);
+            Check(target.Body.velocity.x>0,"Hot source creates outward convection");
+            target.Body.velocity=Vector2.zero; source.temperature=20; g.FlowFields.TickSource(source,.1f);
+            Check(target.Body.velocity==Vector2.zero,"Ambient source creates no convection");
+            source.temperature=20+g.tuning.pressureTemperatureDeadZone;
+            Check(!g.LawSimulation.IsGravitySource(source),"Temperature exactly at convection dead-zone does not qualify");
+            source.temperature=21+g.tuning.pressureTemperatureDeadZone;
+            Check(g.LawSimulation.IsGravitySource(source),"Temperature beyond dead-zone qualifies without mass threshold");
         }
         void Radiation()
         {

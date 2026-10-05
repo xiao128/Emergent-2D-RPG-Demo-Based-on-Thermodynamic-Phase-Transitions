@@ -50,8 +50,8 @@ namespace PhaseArena
             }
             if(g.player==null) return;
             waveLabel.text=g.State==RunState.Title ? "PHASE ARENA  /  世界钟试炼"
-                : g.State==RunState.Boss ? "第 8 / 8 周目  ·  右侧世界钟魔王"
-                : "第 "+g.World+" / 8 周目    世界钟碎片 "+g.Fragments+"/2    右侧守卫 "+g.GuardsRemaining;
+                : g.Encounter.FinalWorld ? "第 "+g.World+" / "+g.tuning.worldCount+" 周目  ·  "+(g.Encounter.Phase==BossEncounterPhase.Dormant ? "世界钟待启动" : g.Encounter.Phase==BossEncounterPhase.Cleared ? "返回世界钟通关" : g.Encounter.Phase==BossEncounterPhase.Summoning ? "魔王召唤中" : "右侧世界钟魔王")
+                : "第 "+g.World+" / "+g.tuning.worldCount+" 周目    世界钟碎片 "+g.Fragments+"/2    右侧守卫 "+g.GuardsRemaining;
             healthBar.fillAmount=Mathf.Clamp01(g.player.health/g.player.maxHealth);
             healthLabel.text="生命 "+Mathf.CeilToInt(Mathf.Max(0,g.player.health))+" / "+g.player.maxHealth.ToString("0");
             var progression=g.player.GetComponent<PlayerProgression>();
@@ -68,7 +68,8 @@ namespace PhaseArena
             }
             lawsLabel.text=builder.ToString();
             string prompt=g.Message;
-            if(g.State==RunState.Explore && Vector2.Distance(g.player.Body.position,g.clock.position)<2.25f)
+            if(g.Encounter.FinalWorld) prompt=g.Encounter.Prompt;
+            else if(g.State==RunState.Explore && Vector2.Distance(g.player.Body.position,g.clock.position)<g.tuning.clockInteractionRadius)
                 prompt=g.Fragments>=2 ? "[ E ] 交付两枚碎片 · 三选一改变世界法则" : "世界钟碎片 "+g.Fragments+"/2：击败守卫后靠近碎片拾取";
             messageLabel.text=prompt;
             if(reactionLabel!=null) reactionLabel.text=g.State==RunState.Transition ? "世界法则改变了" : g.SimulationActive && Time.time<g.ReactionUntil ? g.RecentReaction : "";

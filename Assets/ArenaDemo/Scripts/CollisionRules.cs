@@ -37,7 +37,7 @@ namespace PhaseArena
             if(Has(WorldLaw.ImpactHeat) && speed>tuning.impactHeatThreshold)
             {
                 float heat=.5f*body.Mass*speed*speed*tuning.impactHeatFraction*tuning.impactTemperatureGain;
-                body.AddHeat(Mathf.Min(400,heat/Mathf.Max(.1f,body.Mass))); tile.AddHeat(Mathf.Min(400,heat));
+                body.AddHeat(heat*.5f,normal); tile.AddHeat(heat*.5f);
                 body.Body.velocity-=normal*Vector2.Dot(body.Body.velocity,normal)*(1-Mathf.Sqrt(1-tuning.impactHeatFraction));
                 body.ThermalStep(0);
             }
@@ -49,6 +49,7 @@ namespace PhaseArena
             long key=((long)lo<<32)|(uint)hi;
             float previous; if(impactAt.TryGetValue(key,out previous) && Time.time-previous<.1f) return;
             impactAt[key]=Time.time; if(impactAt.Count>4096) impactAt.Clear(); metrics.collisions++;
+            if(world.ContactLaws.TryFusion(a,b,point)) return;
             if(Has(WorldLaw.Fission))
             {
                 var particle=a.QualifiesForFission(speed) ? a : b.QualifiesForFission(speed) ? b : null;
@@ -91,7 +92,8 @@ namespace PhaseArena
                 // Convert contact-normal relative kinetic energy into heat.
                 float heat=energy*tuning.impactHeatFraction*tuning.impactTemperatureGain;
                 float oldMassA=a.Mass,oldMassB=b.Mass;
-                a.AddHeat(Mathf.Min(400,heat/Mathf.Max(.1f,a.Mass))); b.AddHeat(Mathf.Min(400,heat/Mathf.Max(.1f,b.Mass)));
+                Vector2 heatDirection=(Vector2)b.Collider.bounds.center-(Vector2)a.Collider.bounds.center;
+                a.AddHeat(heat*.5f,-heatDirection); b.AddHeat(heat*.5f,heatDirection);
                 float retained=Mathf.Sqrt(1-tuning.impactHeatFraction);
                 Vector2 centerVelocity=a.Body.bodyType!=RigidbodyType2D.Dynamic || b.Body.bodyType!=RigidbodyType2D.Dynamic ? Vector2.zero
                     : (a.Body.velocity*a.Mass+b.Body.velocity*b.Mass)/(a.Mass+b.Mass);
@@ -136,7 +138,11 @@ namespace PhaseArena
         public void ApplyHeatBlast(Vector2 p,float heat,float radius,ThermoBody source)
         {
             using(var snapshot=BodySnapshot.Rent(bodies)) foreach(var b in snapshot.Bodies)
-                if(b!=null && !b.Dead && b.gameObject.activeInHierarchy && b!=source && Vector2.Distance(b.Collider.ClosestPoint(p),p)<radius) b.AddHeat(heat);
+                if(b!=null && !b.Dead && b.gameObject.activeInHierarchy && b!=source && Vector2.Distance(b.Collider.ClosestPoint(p),p)<radius) b.AddHeat(heat,(Vector2)b.Collider.bounds.center-p);
+            ApplyTerrainHeat(p,heat,radius);
+        }
+        void ApplyTerrainHeat(Vector2 p,float heat,float radius)
+        {
             if(worldGenerator==null) return;
             var c=new Vector2Int(Mathf.FloorToInt(p.x),Mathf.FloorToInt(p.y)); int r=Mathf.CeilToInt(radius)+1;
             for(int x=-r;x<=r;x++) for(int y=-r;y<=r;y++)
@@ -152,7 +158,13 @@ namespace PhaseArena
             React(source.Body.position,2.8f,damage,Mathf.Min(80,energy*.08f),source,DamageKind.Fission);
             Feedback(source.Body.position,"变轻 + 高速 → 爆炸",new Color(.88f,.64f,1));
         }
-        void React(Vector2 p,float radius,float damage,float heat,ThermoBody source,DamageKind kind)
+        public void Fusion(Vector2 point,float energy)
+        {
+            metrics.explosions++; metrics.fusions++;
+            React(point,tuning.fusionRadius,Mathf.Min(tuning.impactDamageCap,energy*tuning.fusionDamagePerEnergy),tuning.fusionHeat,null,DamageKind.Fission,tuning.fusionImpulse);
+            Feedback(point,"双高速对撞 → 核聚变",new Color(1,.85f,.4f));
+        }
+        void React(Vector2 p,float radius,float damage,float heat,ThermoBody source,DamageKind kind,float impulse=-1)
         {
             Pulse(p,new Color(.8f,.6f,1),radius,.5f);
             using(var snapshot=BodySnapshot.Rent(bodies)) foreach(var b in snapshot.Bodies)
@@ -160,11 +172,11 @@ namespace PhaseArena
                 if(b==null || b.Dead || !b.gameObject.activeInHierarchy || b==source) continue;
                 Vector2 delta=b.Body.position-p; if(delta.magnitude>radius+b.radius) continue;
                 float attenuation=Mathf.Clamp01(1-delta.magnitude/(radius+1));
-                b.AddHeat(heat*attenuation);
-                if(b.Body.bodyType==RigidbodyType2D.Dynamic) b.ApplyForce(delta.normalized*Mathf.Min(36,damage*.07f)*attenuation,ForceMode2D.Impulse);
+                b.AddHeat(heat*attenuation,delta);
+                if(b.Body.bodyType==RigidbodyType2D.Dynamic) b.ApplyForce(delta.normalized*(impulse>=0 ? impulse : Mathf.Min(36,damage*.07f))*attenuation,ForceMode2D.Impulse);
                 b.Damage(damage*attenuation,"世界法则连锁反应",kind);
             }
-            if(heat!=0) ApplyHeatBlast(p,heat,radius,source);
+            if(heat!=0) ApplyTerrainHeat(p,heat,radius);
         }
     }
 }

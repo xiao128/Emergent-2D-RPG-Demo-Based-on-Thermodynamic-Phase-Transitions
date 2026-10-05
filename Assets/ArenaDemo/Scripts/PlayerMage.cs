@@ -52,6 +52,7 @@ namespace PhaseArena
             if(GetComponent<ArenaFootsteps>()==null) gameObject.AddComponent<ArenaFootsteps>();
         }
         public void AddMana(float amount) { mana=Mathf.Min(maxMana,mana+amount); }
+        public void ConsumeClockClick() {CancelCharge(); waitForRelease=true;}
         void Update()
         {
             var game = ArenaDirector.Instance;
@@ -79,7 +80,7 @@ namespace PhaseArena
                 AdvanceCharge(Time.deltaTime);
                 if(!held) { if(ChargeProgress<1 || !ReleaseCharge(aim)) CancelCharge(); }
             }
-            else if(!overUI && !waitForRelease)
+            else if(!overUI && !waitForRelease && !game.PointerOverClock())
             {
                 if(Input.GetMouseButton(0)) Cast(true,aim);
                 else if(Input.GetMouseButton(1)) Cast(false,aim);

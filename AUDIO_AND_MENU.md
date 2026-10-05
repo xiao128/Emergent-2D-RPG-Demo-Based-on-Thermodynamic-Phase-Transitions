@@ -19,7 +19,7 @@
 | 文件 | 触发 |
 | --- | --- |
 | Music/StartSceneMusic.mp3 | 主菜单，包括主菜单设置 |
-| Music/NormalMusic.mp3 | 第 1–7 关，包括暂停和选法则 |
+| Music/NormalMusic.mp3 | 第 1–8 关，包括暂停和选法则 |
 | Music/BossMusic.mp3 | 最终关，直到返回主菜单 |
 | 鼠标点击1-xys20070412.wav | 按钮悬停 |
 | 鼠标点击2-xys20070412.wav | 按钮点击 |
@@ -53,3 +53,5 @@ ArenaAudio 负责音乐选曲与固定音效通道；ArenaMenuUI 只处理设置
 - `Verification/Captures/esc-settings-final.png`
 
 自动检查将世界编号设为 1–8 来验证音乐映射；八关流程回归另外通过真实的守卫、碎片、世界钟与 Boss 状态转换。它用直接伤害完成流程，不代表自然通关或平衡测试。
+
+最终世界（第九关）探索阶段仍用普通关卡音乐，点击世界钟才从头播放 Boss 音乐。召唤时机跟随该音轨播放位置；暂停最终战会暂停音轨，防止音乐高潮与魔王登场错位。

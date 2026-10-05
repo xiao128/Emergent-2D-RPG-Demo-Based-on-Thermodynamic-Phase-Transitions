@@ -1,0 +1,45 @@
+failures=0
+PASS Temperature-gap isolation law removed from random pool
+PASS Random pool has 18 available laws after replacement and additions
+PASS NuclearFusion available
+PASS VaporGlide available
+PASS RecoilPropellant available
+PASS ViscousWelding available
+PASS BernoulliWake available
+PASS Equal energy heats a mass-1 object five times as much as mass-5
+PASS Cooling also accounts for mass
+PASS Hard temperature limits are -1000 and +1000
+PASS Every meter removes the same 0.2 absolute mass from light and heavy bodies
+PASS Heavy bodies lose proportionately less size
+PASS Body heat exchange conserves heat energy
+PASS Fast versus stationary does not fuse
+PASS Same-direction chasing does not fuse
+PASS Opposed but separating objects do not fuse
+PASS Both speeds must strictly exceed 12
+PASS Two opposite callback directions resolve exactly one blast using pre-solver velocities
+PASS Fusion blast damages both collision participants
+PASS Actual Physics2D head-on collision triggers one fusion through native callbacks
+PASS Hot source pushes radially outward
+PASS Equal field force produces inverse-mass acceleration
+PASS Cold source pulls radially inward without a mass gate
+PASS Ambient source has no convection field
+PASS Even manually adding retired law no longer applies isolation force
+PASS Wake pulls rear and flanks while excluding the front
+PASS Wake uses strict speed-to-diameter threshold
+PASS Below extreme heat no propellant consumed
+PASS 50 percent of 100 heat consumes 0.1 mass at cost 500
+PASS Heat from left produces rightward recoil and matching shrink
+PASS Gas is visible-only and does not consume projectile slots
+PASS Cooling does not consume propellant
+PASS Uniform heating emits propellant without inventing a directional kick
+PASS Destructible fixed trees can lose propellant and shrink while remaining fixed
+PASS Both temperatures must strictly exceed 200
+PASS High heat contact damps tangential relative motion
+PASS Normal spring pulls separating welded bodies together
+PASS Cooling releases the temporary weld
+PASS Removing welding law clears all constraints
+PASS Exactly 60 degrees does not trigger glide
+PASS Hot body contacting ambient water triggers five-second glide
+PASS Ice contact activates production state and locks ground drag to zero
+PASS Glide provides persistent normal repulsion
+PASS Removing glide restores normal ground friction

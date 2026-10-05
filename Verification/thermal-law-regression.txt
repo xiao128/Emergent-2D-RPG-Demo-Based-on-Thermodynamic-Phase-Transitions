@@ -1,17 +1,11 @@
 failures=0
 PASS Both new laws enter random catalog
-PASS Random pool has 14 laws, retaining all retired exclusions
-PASS Small dense cold ball no longer generates gravity
-PASS Fully charged hot stone does not generate gravity
-MEASURE fullStoneMass=3.1 targetVelocity=(0.00, 0.00)
-PASS Fully charged cold stone attracts warm target
-PASS Mass exactly at threshold does not attract even when cold
-PASS Below mass threshold cannot attract
-PASS Temperature exactly at cold threshold does not qualify
-PASS Mass above threshold and temperature below threshold qualifies
-PASS Public cold threshold applies immediately
-PASS Warming a gravity source disables attraction immediately
-PASS Cold heavy monsters use the same gravity source rule
+PASS Random pool has 18 laws, retaining all retired exclusions
+PASS Small cold source creates inward convection without old mass gate
+PASS Hot source creates outward convection
+PASS Ambient source creates no convection
+PASS Temperature exactly at convection dead-zone does not qualify
+PASS Temperature beyond dead-zone qualifies without mass threshold
 PASS Baseline thermal range does not reach body three units away
 PASS Expanded 3.6-unit heat exchange reaches across two grid cells
 PASS Visible radiation ring is exactly 1.5 times baseline

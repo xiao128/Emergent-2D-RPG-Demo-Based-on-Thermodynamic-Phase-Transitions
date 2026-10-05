@@ -107,7 +107,7 @@ namespace PhaseArena
             e.Body.velocity=Vector2.left*8; world.laws.Add(WorldLaw.ImpactHeat);
             Physics2D.SyncTransforms(); float hp=p.health; Step(20);
             Check(p.health<hp && world.metrics.collisions>0,"Actual enemy-player contact damages the player");
-            Check(p.temperature>60 && e.temperature>60,"Actual collision causes visible kinetic-energy heating");
+            Check(p.temperature>40 && e.temperature>40,"Actual collision shares converted energy and heats both bodies past visible heat-ring threshold");
             results.Add("MEASURE contactDamage="+(hp-p.health)+" temperatures="+p.temperature+","+e.temperature);
             Clear();
             var a=Fixture(new Vector2(-20,-20)); var b=Fixture(new Vector2(-18,-20));

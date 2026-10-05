@@ -1,0 +1,23 @@
+failures=0
+PASS Ninth world initially has zero enemies including guards and boss
+PASS Final world exploration keeps normal music until activation
+PASS Distant player cannot activate the clock
+PASS Clock interaction starts the summoning phase
+PASS Player teleports left to safe dry position with no residual motion
+PASS World clock turns blue
+PASS Boss BGM starts at the beginning of the ritual
+PASS Pause freezes both ritual countdown and boss music
+PASS No enemy appears before three seconds
+PASS First random minion appears at three seconds
+PASS Second random minion appears one second later
+PASS Twelve minions stage the entrance from second 3 through 14
+PASS Boss arrives at 15 game seconds
+PASS Boss appears at world clock position
+PASS Boss arrival aligns with the fifteen-second music cue
+MEASURE arrival=15.01866 music=15.01866 minions=12
+PASS Intro minion spawning stops after boss arrival
+PASS Boss death retains player and waits for final clock interaction
+PASS Player must return to clock to claim completion
+PASS Second clock interaction completes run and removes player before popup
+PASS Existing five-second result delay remains in effect
+PASS Restart resets encounter and clock color

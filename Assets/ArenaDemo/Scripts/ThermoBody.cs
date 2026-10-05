@@ -5,7 +5,9 @@ namespace PhaseArena
 {
     public enum BodyKind { Player, Enemy, Boss, Rock, Tree, Projectile, Shield, StaticObstacle }
     public enum WorldLaw { ThermalMass, ColdBounce, SuperSlide, VaporRecoil, ThermalArc, ImpactHeat, Abrasion, Fission, Gravity,
-        Leidenfrost, ThermalShock, DoubleForce, ThermalExpansion, Crowding, StoneMagic, ExpandedRadiation, ThermalInjury, FrictionHeat }
+        Leidenfrost, ThermalShock, DoubleForce, ThermalExpansion, Crowding, StoneMagic, ExpandedRadiation, ThermalInjury, FrictionHeat,
+        NuclearFusion, VaporGlide, RecoilPropellant, ViscousWelding, BernoulliWake }
+    [DefaultExecutionOrder(1000)]
     [RequireComponent(typeof(Rigidbody2D),typeof(Collider2D))]
     public class ThermoBody : MonoBehaviour
     {
@@ -27,6 +29,10 @@ namespace PhaseArena
         public bool IsActor => kind==BodyKind.Player || kind==BodyKind.Enemy || kind==BodyKind.Boss;
         public bool IsEnemy => kind==BodyKind.Enemy || kind==BodyKind.Boss;
         public float Mass => Body!=null ? Body.mass : baseMass;
+        public float HeatCapacity => Mathf.Max(ArenaDirector.Instance.tuning.minimumHeatCapacity,Mass*ArenaDirector.Instance.tuning.specificHeatCapacity);
+        public Vector2 IncomingVelocity { get; private set; }
+        readonly VaporGlideStatus glide=new VaporGlideStatus();
+        public bool VaporGliding => glide.Active;
         float age,wetCooldown;
         float fissionAt=-1;
         bool steamSlowed;
@@ -61,7 +67,7 @@ namespace PhaseArena
             get
             {
                 var world=ArenaDirector.Instance;
-                return world!=null ? GroundDragAt(world.FloorAt(Body.position),world) : Body.drag;
+                return glide.Active ? 0 : world!=null ? GroundDragAt(world.FloorAt(Body.position),world) : Body.drag;
             }
         }
         float GroundDragAt(TerrainCell floor,ArenaDirector world)
@@ -108,6 +114,7 @@ namespace PhaseArena
         public void ResetAt(Vector2 position)
         {
             massRemaining=1;
+            glide.Reset(); IncomingVelocity=Vector2.zero;
             if(shape!=null) shape.Restore();
             shockArmed=false;
             thermalInjury.Reset();
@@ -132,7 +139,10 @@ namespace PhaseArena
                 if(old!=FloorPhase.Ice && floor.phase==FloorPhase.Ice) world.metrics.frozenTiles++;
             }
             bool ice=floor!=null && !floor.rough && floor.phase==FloorPhase.Ice;
+            glide.Tick(this,world,Time.fixedDeltaTime);
+            UpdateSurfaceMaterial(world);
             float friction=GroundDragAt(floor,world);
+            if(glide.Active) friction=0;
             Body.drag=friction;
             Body.velocity=Vector2.ClampMagnitude(Body.velocity,SpeedLimit);
             if(floor==null || floor.rough) LastSafePosition=Body.position;
@@ -149,7 +159,9 @@ namespace PhaseArena
             }
             else fissionAt=-1;
             if(trail!=null) { trail.enabled=Body.velocity.sqrMagnitude>16; trail.emitting=trail.enabled; trail.startColor=temperature>80 ? new Color(1,.47f,.2f,.65f) : temperature<-40 ? new Color(.4f,.84f,1,.65f) : new Color(.95f,.82f,.5f,.6f); }
+            RecordIncomingMotion();
         }
+        public void RecordIncomingMotion() { IncomingVelocity=Body.velocity; }
         // Shared by every dynamic body: actors, rocks and both sides' projectiles.
         // Heating and erosion are independent global laws.
         public void ApplyGroundFrictionLaws(float friction,bool ice,float dt)
@@ -159,20 +171,31 @@ namespace PhaseArena
             var t=world.tuning;
             if(world.Has(WorldLaw.FrictionHeat) && !ice) AddHeat(Body.velocity.sqrMagnitude*Mathf.Max(0,friction)*t.frictionHeatGain*dt);
             if(!world.Has(WorldLaw.Abrasion) || Body.velocity.magnitude<=t.abrasionSpeedThreshold || temperature<=t.abrasionHotTemperature) return;
-            massRemaining*=Mathf.Pow(1-Mathf.Clamp01(t.abrasionPerMeter),Body.velocity.magnitude*dt);
-            ThermalStep(0);
-            if(massRemaining>=t.minimumMassFraction || indestructible) return;
+            float loss=t.abrasionMassPerMeter*Body.velocity.magnitude*dt;
             float energy=.5f*Mass*Body.velocity.sqrMagnitude;
-            if(world.Has(WorldLaw.Fission) && energy>=t.fissionMinimumEnergy) world.Fission(this,energy);
-            Die("磨损耗尽",DamageKind.Terrain);
+            if(!indestructible && Mass-loss<baseMass*t.minimumMassFraction && world.Has(WorldLaw.Fission) && energy>=t.fissionMinimumEnergy) world.Fission(this,energy);
+            ConsumeMass(loss,"磨损耗尽");
+        }
+        public float ConsumeMass(float amount,string cause)
+        {
+            if(Dead || indestructible || amount<=0) return 0;
+            float actual=Mathf.Min(amount,Mass);
+            massRemaining*=Mathf.Max(0,Mass-actual)/Mathf.Max(.0001f,Mass);
+            ThermalStep(0);
+            if(massRemaining<ArenaDirector.Instance.tuning.minimumMassFraction) Die(cause,DamageKind.Terrain);
+            return actual;
         }
         public void ThermalStep(float dt)
         {
+            // Enemy Awake may request its tuning before our late execution-order
+            // Awake. Cache dependencies without relying on component callback order.
+            if(Body==null) Body=GetComponent<Rigidbody2D>();
+            if(bodyCollider==null) bodyCollider=GetComponent<Collider2D>();
             var world=ArenaDirector.Instance;
             if(Dead || IsCharging || world==null || world.tuning==null) return;
             var t=world.tuning;
             temperature=Mathf.Clamp(temperature,t.minimumTemperature,t.maximumTemperature);
-            temperature=Mathf.MoveTowards(temperature,t.ambientTemperature,(t.ambientRecovery+Body.velocity.magnitude*t.windRecovery)*dt);
+            temperature=Mathf.MoveTowards(temperature,t.ambientTemperature,(t.ambientRecovery+Body.velocity.magnitude*t.windRecovery)*dt/HeatCapacity);
             TrackThermalShock(); if(Dead) return;
             if(kind==BodyKind.Tree && temperature>80) AddHeat(12*dt);
             thermalInjury.Tick(this,world,dt); if(Dead) return;
@@ -183,8 +206,7 @@ namespace PhaseArena
                 // Temperature changes inertia, but does not change current velocity.
                 Body.mass=next;
             }
-            var material=world.Has(WorldLaw.ColdBounce) && temperature<-40 ? world.bouncyMaterial : world.normalMaterial;
-            if(bodyCollider.sharedMaterial!=material) bodyCollider.sharedMaterial=material;
+            UpdateSurfaceMaterial(world);
             if(kind!=BodyKind.StaticObstacle && (world.Has(WorldLaw.ThermalExpansion) || massRemaining<1 || shape!=null))
             {
                 if(shape==null) shape=gameObject.AddComponent<ThermalShape>();
@@ -192,25 +214,45 @@ namespace PhaseArena
                 if(world.Has(WorldLaw.ThermalExpansion)) shape.Step(dt); else shape.Restore();
             }
         }
+        void UpdateSurfaceMaterial(ArenaDirector world)
+        {
+            bool bounce=world.Has(WorldLaw.ColdBounce) && temperature<-40;
+            var material=glide.Active ? world.ContactLaws.GlideMaterial(bounce) : bounce ? world.bouncyMaterial : world.normalMaterial;
+            if(bodyCollider.sharedMaterial!=material) bodyCollider.sharedMaterial=material;
+        }
         public bool QualifiesForFission(float speed)
         {
             var t=ArenaDirector.Instance!=null ? ArenaDirector.Instance.tuning : null;
             return t!=null && Body.bodyType==RigidbodyType2D.Dynamic && !indestructible && !Dead && age>.2f
                 && Mass<t.fissionMass && speed>t.fissionSpeed && .5f*Mass*speed*speed>=t.fissionMinimumEnergy;
         }
-        public void AddHeat(float amount)
+        // Input is energy, not a direct temperature delta. Direction points from
+        // the heating surface/source into this body; exhaust points the other way.
+        public void AddHeat(float amount,Vector2 heatingDirection=default(Vector2))
         {
-            var t=ArenaDirector.Instance!=null ? ArenaDirector.Instance.tuning : null;
-            TrackThermalShock();
-            float before=temperature;
-            temperature=Mathf.Clamp(temperature+amount,t!=null ? t.minimumTemperature : -600,t!=null ? t.maximumTemperature : 800);
+            if(Dead) return;
             var world=ArenaDirector.Instance;
-            if(world!=null && world.Has(WorldLaw.VaporRecoil) && before>=t.steamHotThreshold && before-temperature>=t.steamCoolingThreshold && Time.time>=wetCooldown)
+            if(world==null) {temperature=Mathf.Clamp(temperature+amount/Mathf.Max(.05f,Mass),-1000,1000); return;}
+            ExchangeHeat(amount,heatingDirection,HeatCapacity,world);
+        }
+        // The world tick supplies its cached capacity. Ordinary inputs still read
+        // current mass; shedding propellant invalidates this tick's capacity cache.
+        internal void ExchangeHeat(float amount,Vector2 heatingDirection,float capacity,ArenaDirector world)
+        {
+            if(Dead) return;
+            var t=world.tuning;
+            bool shock=world.Has(WorldLaw.ThermalShock);
+            if(shock) TrackThermalShock();
+            float before=temperature;
+            if(amount>0 && world.Has(WorldLaw.RecoilPropellant)) {amount=ThermalRecoil.Receive(this,world,amount,heatingDirection); capacity=HeatCapacity;}
+            if(Dead) return;
+            temperature=Mathf.Clamp(temperature+amount/capacity,t.minimumTemperature,t.maximumTemperature);
+            if(world.Has(WorldLaw.VaporRecoil) && before>=t.steamHotThreshold && before-temperature>=t.steamCoolingThreshold && Time.time>=wetCooldown)
             {
                 wetCooldown=Time.time+t.steamWaveCooldown;
                 world.SteamWave(this,before-temperature);
             }
-            TrackThermalShock();
+            if(shock) TrackThermalShock();
         }
         public void ClearThermalStatus()
         {
@@ -329,6 +371,7 @@ namespace PhaseArena
                     if(kind==BodyKind.Shield) shield.Damage(ArenaDirector.ImpactDamage(mover.Mass,speed),"护盾抵挡",DamageKind.Impact);
                     return;
                 }
+                world.ContactLaws.Touch(this,other,c.contactCount>0 ? contact.point : Body.position);
                 world.ResolveCollision(this,other,speed,c.contactCount>0 ? contact.point : Body.position,c.contactCount>0 ? contact.normalImpulse : 0);
             }
             else
@@ -336,9 +379,16 @@ namespace PhaseArena
                 var contact=c.contactCount>0 ? c.GetContact(0) : default(ContactPoint2D);
                 float speed=c.contactCount>0 ? Mathf.Abs(Vector2.Dot(c.relativeVelocity,contact.normal)) : c.relativeVelocity.magnitude;
                 var terrain=c.collider.GetComponentInParent<TerrainCell>();
-                if(terrain!=null) world.Collisions.ResolveTerrainCollision(this,terrain,speed,c.contactCount>0 ? contact.point : Body.position,contact.normal);
+                if(terrain!=null) {glide.Touch(this,world,terrain,contact.normal); world.Collisions.ResolveTerrainCollision(this,terrain,speed,c.contactCount>0 ? contact.point : Body.position,contact.normal);}
                 else world.DeliverProjectileHeat(this,c.contactCount>0 ? contact.point : Body.position);
             }
+        }
+        void OnCollisionStay2D(Collision2D c)
+        {
+            var world=ArenaDirector.Instance; if(world==null || !world.SimulationActive || Dead) return;
+            var other=c.collider.GetComponentInParent<ThermoBody>();
+            if(other!=null) world.ContactLaws.Touch(this,other,c.contactCount>0 ? c.GetContact(0).point : Body.position);
+            else { var tile=c.collider.GetComponentInParent<TerrainCell>(); if(tile!=null) glide.Touch(this,world,tile,c.contactCount>0 ? c.GetContact(0).normal : Vector2.zero); }
         }
     }
 }

@@ -1,0 +1,5 @@
+failures=0
+PASS Native body state activates at ice overlap and zeros ground/contact friction
+MEASURE elapsed=4.705748 active=True drag=0 velocity=(18.80, 0.00)
+PASS Glide persists off surface after cooling for almost five seconds
+PASS At five seconds glide expires and ordinary friction/material resumes

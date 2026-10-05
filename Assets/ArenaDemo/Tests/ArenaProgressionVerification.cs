@@ -33,9 +33,16 @@ namespace PhaseArena
             }
             foreach(var ai in FindObjectsOfType<EnemyBrain>()) ai.enabled=false;
             var boss=world.bodies.Find(b=>b!=null && !b.Dead && b.kind==BodyKind.Boss);
-            Check(world.State==RunState.Boss && boss!=null,"Eighth world creates the boss");
+            Check(world.World==9 && world.State==RunState.Explore && boss==null && world.bodies.FindAll(b=>b!=null && b.IsEnemy && !b.Dead).Count==0,"Ninth world starts empty and waits for clock activation");
+            world.player.Body.position=world.clock.position; world.player.transform.position=world.clock.position;
+            Check(world.TryOpenClock() && world.State==RunState.Boss,"Final clock starts the encounter");
+            world.Encounter.Tick(world.tuning.bossEncounterSpawnDelay);
+            boss=world.Encounter.Boss;
+            Check(boss!=null,"Boss appears after the summon timeline");
             if(boss!=null) boss.Damage(boss.health+1,"流程验证",DamageKind.Staff);
-            Check(world.State==RunState.Victory,"Boss defeat enters victory");
+            Check(world.State==RunState.Boss && world.player!=null && world.Encounter.Phase==BossEncounterPhase.Cleared,"Boss defeat waits for final clock interaction");
+            world.player.Body.position=world.clock.position; world.player.transform.position=world.clock.position;
+            Check(world.TryOpenClock() && world.State==RunState.Victory,"Final clock interaction enters victory");
             world.Restart();
             Check(world.World==1 && world.laws.Count==0 && world.Fragments==0,"Restart clears progress and laws");
             world.player.health=5;

@@ -54,7 +54,10 @@ namespace PhaseArena
             if(MusicSource==null) return;
             var g=ArenaDirector.Instance;
             AudioClip clip=g==null || g.State==RunState.Title ? menuMusic
-                : g.World>=g.tuning.worldCount ? bossMusic : normalMusic;
+                : g.Encounter.FinalWorld && g.Encounter.Started ? bossMusic : normalMusic;
+            // Match the summon timeline to the music when pausing the encounter.
+            if(MusicSource.clip==bossMusic && g!=null)
+            { if(g.Paused && MusicSource.isPlaying) MusicSource.Pause(); else if(!g.Paused && !MusicSource.isPlaying) MusicSource.UnPause(); }
             if(MusicSource.clip==clip) return;
             MusicSource.Stop(); MusicSource.clip=clip; MusicSource.volume=MusicVolume;
             if(clip!=null) MusicSource.Play();

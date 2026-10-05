@@ -34,8 +34,16 @@ PASS World 7 fragments unlock the clock
 PASS World 7 offers only current document rules
 PASS World 7 choice starts transition
 PASS World 7 advances and retains its rule
-PASS Eighth world creates the boss
-PASS Boss defeat enters victory
+PASS World 8 has two clock guards
+PASS World 8 fragments unlock the clock
+PASS World 8 offers only current document rules
+PASS World 8 choice starts transition
+PASS World 8 advances and retains its rule
+PASS Ninth world starts empty and waits for clock activation
+PASS Final clock starts the encounter
+PASS Boss appears after the summon timeline
+PASS Boss defeat waits for final clock interaction
+PASS Final clock interaction enters victory
 PASS Restart clears progress and laws
 PASS Player death enters defeat
 PASS Restart after defeat restores playable state

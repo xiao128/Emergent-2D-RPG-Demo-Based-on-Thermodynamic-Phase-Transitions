@@ -83,8 +83,8 @@ namespace PhaseArena
 
             Isolate(); typeof(ArenaDirector).GetProperty("World").SetValue(g,g.tuning.worldCount); typeof(ArenaDirector).GetProperty("State").SetValue(g,RunState.Boss);
             var boss=g.Spawn(g.bossPrefab,new Vector2(4,-8)); boss.GetComponent<EnemyBrain>().enabled=false;
-            var winner=g.player; float winAt=Time.realtimeSinceStartup; boss.Die("胜利展示验证");
-            Check(g.State==RunState.Victory && g.player==null && !winner.gameObject.activeSelf && !g.Outcome.ResultReady,"Boss death removes player and starts victory delay");
+            var winner=g.player; float winAt=Time.realtimeSinceStartup; boss.Die("胜利展示验证"); g.CompleteRun();
+            Check(g.State==RunState.Victory && g.player==null && !winner.gameObject.activeSelf && !g.Outcome.ResultReady,"Clock completion removes player and starts victory delay");
             yield return null;
             Check(winner==null && !g.hud.resultPanel.activeSelf,"Victory player is actually destroyed and popup stays hidden");
             yield return new WaitForSecondsRealtime(4.25f);

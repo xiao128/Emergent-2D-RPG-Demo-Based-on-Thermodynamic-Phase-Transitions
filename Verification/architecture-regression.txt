@@ -9,8 +9,8 @@ PASS Released ball is stationary and charges mana once
 PASS Eight release directions have clearance and can be kicked
 PASS No ball created inside a tight wall/player gap
 PASS Actual enemy-player contact damages the player
-PASS Actual collision causes visible kinetic-energy heating
-MEASURE contactDamage=14.02105 temperatures=74.56842,80.63158
+PASS Actual collision shares converted energy and heats both bodies past visible heat-ring threshold
+MEASURE contactDamage=14.02105 temperatures=47.28421,50.31579
 PASS Heating follows speed squared and ignores contact-impulse magnitude
 PASS Returning own projectile still causes collision damage
 PASS Rock friction heating and mass erosion

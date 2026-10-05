@@ -5728,6 +5728,9 @@ MonoBehaviour:
     repulsions: 0
     thermalShocks: 0
     crushTicks: 0
+    fusions: 0
+    recoilEvents: 0
+    welds: 0
     seconds: 0
     enemyDamage: 0
     environmentalEnemyDamage: 0

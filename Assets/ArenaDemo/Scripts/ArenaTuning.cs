@@ -11,7 +11,7 @@ namespace PhaseArena
         [Tooltip("世界高度，单位：地格；重新生成世界时生效。")]
         public int height = 56;
         [Tooltip("一轮游戏的世界数量。")]
-        public int worldCount = 8;
+        public int worldCount = 9;
         [Tooltip("每个世界随机生成的游荡怪物数量，不含守卫和 Boss。")]
         public int roamingCount = 19;
         [Tooltip("可移动普通石头的生成数量。")]
@@ -178,9 +178,9 @@ namespace PhaseArena
         [Tooltip("环境常温；物体逐渐回到此温度，空格清除冷热也回到此温度，单位：°C。")]
         public float ambientTemperature = 20;
         [Tooltip("所有实体温度的硬性下限，单位：°C。")]
-        public float minimumTemperature = -600;
+        public float minimumTemperature = -1000;
         [Tooltip("所有实体温度的硬性上限，单位：°C。")]
-        public float maximumTemperature = 800;
+        public float maximumTemperature = 1000;
         [Tooltip("静止物体每秒向常温恢复的温度，单位：°C/秒。")]
         public float ambientRecovery = 1.8f;
         [Tooltip("每单位移动速度带来的额外每秒回温；速度越快，回到常温越快。")]
@@ -192,7 +192,7 @@ namespace PhaseArena
         public float roughRockDrag = 1.6f;
         [Tooltip("冰面阻尼系数；越小滑行越远。")]
         public float iceDrag = .02f;
-        [Header("撞击升温、磨损、爆炸与冷质量引力")]
+        [Header("撞击升温与历史法则参数")]
         [Tooltip("旧冷热改变重量法则的最小质量倍率；该法则已移出随机池。")]
         public float hotMassFactor = .12f;
         [Tooltip("旧冷热改变重量法则的最大质量倍率；该法则已移出随机池。")]
@@ -203,20 +203,122 @@ namespace PhaseArena
         public float arcDamagePerDegreeMass = .65f;
         [Tooltip("撞击升温法则将法向相对动能转换成热量的比例，0.45 表示 45%。")]
         public float impactHeatFraction = .45f;
-        [Tooltip("撞击热量转为温升的额外增益；越大升温越明显。")]
+        [Tooltip("撞击热量的额外增益；温升还会除以目标的质量和比热容。")]
         public float impactTemperatureGain = 8;
         [Header("摩擦生热与热磨损（两个独立法则）")]
-        [Min(0), Tooltip("摩擦生热法则的温升系数：速度平方 × 地面阻尼 × 此值 × 时间；冰面不生热。")]
+        [Min(0), Tooltip("摩擦生热的热量系数：速度平方 × 地面阻尼 × 此值 × 时间；温升除以热容量，冰面不生热。")]
         public float frictionHeatGain=.09f;
         [Min(0), Tooltip("热磨损要求速度严格大于此值，单位：世界单位/秒。默认 8，普通走路不磨损。")]
         public float abrasionSpeedThreshold=8;
         [Tooltip("热磨损要求温度严格高于此值，单位：°C；默认 40，与热外圈的门槛一致。")]
         public float abrasionHotTemperature=40;
-        [Range(0,1), Tooltip("热磨损每米损失的剩余质量比例。0.15 表示每米损失 15%，模型和碰撞体按剩余质量的平方根缩小。")]
-        public float abrasionPerMeter = .15f;
+        [HideInInspector] public float abrasionPerMeter=.15f; // Legacy percentage, no longer used.
+        [Min(0), Tooltip("热磨损每滑行一米损失的固定质量，默认 0.2；不是百分比。模型与碰撞体同步缩小。")]
+        public float abrasionMassPerMeter=.2f;
         [Tooltip("磨损后剩余质量占基础质量的最低比例；低于此值会耗尽或触发爆炸，0.1 表示 10%。")]
         public float minimumMassFraction = .1f;
+        [Header("统一热容量与传热")]
+        [Min(.001f), Tooltip("单位质量的比热容。温度变化 = 输入热量 / (质量 × 比热容)，质量越大越难改变温度。")]
+        public float specificHeatCapacity=1;
+        [Min(.001f), Tooltip("热容量的计算下限，避免极小物体接收极小热量时数值发散。")]
+        public float minimumHeatCapacity=.05f;
+        [Min(.001f), Tooltip("一格河流的等效质量，用于水/冰/蒸汽的热容量。")]
+        public float terrainThermalMass=4;
+        [Min(0), Tooltip("物体之间的传热速率，按双方热容量计算；每轮不超过热平衡需要的热量。")]
+        public float bodyHeatConductivity=.45f;
+        [Min(0), Tooltip("物体与河流地格之间的传热速率，同样考虑双方热容量。")]
+        public float terrainHeatConductivity=.35f;
+        [Header("第九世界：世界钟召唤仪式")]
+        [Min(0), Tooltip("点击最终世界钟后，把玩家向左传送的距离，避免与刷怪点重叠。")]
+        public float bossPlayerTeleportDistance=5;
+        [Min(0), Tooltip("启动世界钟和 Boss 音乐后，多少游戏秒开始刷随机怪。")]
+        public float bossEncounterMinionDelay=3;
+        [Min(.1f), Tooltip("世界钟每次生成一只随机普通怪物的间隔，游戏秒。")]
+        public float bossEncounterMinionInterval=1;
+        [Min(0), Tooltip("启动仪式/Boss 音乐后，多少游戏秒召唤魔王。默认 15，配合音乐高潮。")]
+        public float bossEncounterSpawnDelay=15;
+        [Min(0), Tooltip("世界钟交互距离；鼠标点击和 E 都共用此距离。")]
+        public float clockInteractionRadius=2.25f;
+        [Min(.1f), Tooltip("鼠标距离世界钟中心多近视为点中了世界钟。")]
+        public float clockClickRadius=1.1f;
+        [Tooltip("最终世界钟启动后的颜色。")]
+        public Color activeBossClockColor=new Color(.25f,.7f,1);
+        [Header("核聚变：双高速迎面碰撞")]
+        [Min(0), Tooltip("双方碰撞前速度都必须严格超过此值，才可触发核聚变。")]
+        public float fusionMinimumSpeed=12;
+        [Range(-1,0), Tooltip("双方速度方向点积须低于此值；越接近 -1，越要求迎面对撞。还会检查双方都沿法线靠近。")]
+        public float fusionOpposingDot=-.2f;
+        [Min(0), Tooltip("核聚变爆炸半径，世界单位。")]
+        public float fusionRadius=3;
+        [Min(0), Tooltip("爆炸伤害 = 接近方向相对动能 × 此系数，受撞击伤害上限限制。")]
+        public float fusionDamagePerEnergy=.12f;
+        [Min(0), Tooltip("核聚变对爆炸半径内实体施加的最大径向冲量。")]
+        public float fusionImpulse=20;
+        [Min(0), Tooltip("核聚变爆炸向实体输入的热量；温升仍除以目标热容量。")]
+        public float fusionHeat=60;
+        [Header("莱顿弗罗斯特气垫滑行")]
+        [Tooltip("接触常温水或冰面时，物体温度须严格高于此值。")]
+        public float glideHotTemperature=60;
+        [Tooltip("常温液体的最高温度；蒸汽不触发，冰面不受此水温门槛限制。")]
+        public float glideLiquidMaximumTemperature=40;
+        [Min(0), Tooltip("触发后持续多久将地面滑动摩擦锁定为零，游戏秒。")]
+        public float glideDuration=5;
+        [Min(0), Tooltip("气垫沿接触法线持续施加的反推力；加速度随质量增大而减小。")]
+        public float glideRepulsionForce=8;
+        [Header("压强对流场：冷热径向风场")]
+        [Min(0), Tooltip("冷热物体影响附近动态实体的风场半径；不要求质量门槛。")]
+        public float pressureRadius=4;
+        [Min(0), Tooltip("与环境温度之差超过此值才产生风场，避免常温噪声。")]
+        public float pressureTemperatureDeadZone=10;
+        [Min(0), Tooltip("风力 = 与环境的温差 × 此系数 × 距离衰减。热排斥，冷吸引；目标加速度反比于质量。")]
+        public float pressureForcePerDegree=.025f;
+        [Min(0), Tooltip("单个源对单个目标施加的最大风力。")]
+        public float pressureMaximumForce=50;
+        [Header("反冲工质：高温受热喷气")]
+        [Tooltip("此温度以上的新增热量可用于消耗自身质量并产生反冲。")]
+        public float recoilHotTemperature=200;
+        [Range(0,1), Tooltip("超过温度门槛所需热量后的输入热量，分配给喷气的比例；默认 50%。")]
+        public float recoilEnergyFraction=.5f;
+        [Min(.001f), Tooltip("每消耗一单位质量需要的热量；数值越大，磨掉的质量越少。")]
+        public float recoilEnergyPerMass=500;
+        [Min(0), Tooltip("喷气速度上限；喷出质量 × 速度形成反推冲量，同时受输入能量限制。")]
+        public float recoilExhaustSpeed=30;
+        [Min(0), Tooltip("喷气可视微粒的寿命，秒；微粒仅用于表现，不占投射物池、不参与物理。")]
+        public float recoilParticleLifetime=.4f;
+        [Header("熔融粘滞与表面熔接")]
+        [Tooltip("接触的双方温度都必须高于此值，才形成临时粘滞和法线拉力。")]
+        public float weldingHotTemperature=200;
+        [Min(0), Tooltip("高温表面动摩擦的基础系数。")]
+        public float weldingBaseFriction=.6f;
+        [Min(0), Tooltip("双方较低温度每高于熔接门槛一度，增加多少切向摩擦系数。")]
+        public float weldingFrictionPerDegree=.08f;
+        [Min(0), Tooltip("分离时的法线弹簧系数；越大越难从热接触面拉开。")]
+        public float weldingSpring=80;
+        [Min(0), Tooltip("法线分离速度的阻尼，抑制接触面的拉开。")]
+        public float weldingDamping=8;
+        [Min(0), Tooltip("单个熔接面法线拉力的上限。")]
+        public float weldingMaximumForce=120;
+        [Min(.02f), Tooltip("离开接触后维持临时熔接的时间；冷却或移除法则会立即解除。")]
+        public float weldingContactGrace=.2f;
+        [Min(1), Tooltip("同时维护的熔接面数量上限，限制密集场景开销。")]
+        public int weldingMaximumPairs=64;
+        [Header("伯努利尾流负压")]
+        [Min(0), Tooltip("速度除以碰撞体直径，严格超过此值产生尾流；小物体更容易达到相对体积的高速。")]
+        public float wakeSpeedPerDiameter=10;
+        [Min(0), Tooltip("尾流半径 = 碰撞体直径 × 此倍率，受最大半径限制。")]
+        public float wakeRadiusPerDiameter=2.5f;
+        [Min(0), Tooltip("尾流最小影响半径。")]
+        public float wakeMinimumRadius=1.2f;
+        [Min(0), Tooltip("尾流最大影响半径，限制高速大物体的查询范围。")]
+        public float wakeMaximumRadius=8;
+        [Range(-1,1), Tooltip("后方和侧翼的方向范围；与前进方向点积大于此值的正前方目标不受影响。")]
+        public float wakeForwardExclusionDot=.35f;
+        [Min(0), Tooltip("尾流吸力 = 速度平方 × 占地面积 × 此系数 × 距离衰减；目标加速度反比质量。")]
+        public float wakeForceCoefficient=.012f;
+        [Min(0), Tooltip("单个尾流源对单个目标的最大吸力。")]
+        public float wakeMaximumForce=50;
         [Tooltip("轻小高速爆炸法则的质量上限；质量小于此值才有资格爆炸。")]
+        [Header("轻小高速爆炸（原法则）")]
         public float fissionMass = .3f;
         [Tooltip("轻小高速爆炸法则的速度门槛，单位：世界单位/秒。")]
         public float fissionSpeed = 10;
@@ -227,14 +329,14 @@ namespace PhaseArena
         [Tooltip("满足爆炸条件后到爆炸的延迟，单位：秒。")]
         public float fissionDelay = .1f;
         [HideInInspector] public float vaporImpulse = 30;
-        [Tooltip("冷质量重力畸变的吸引半径，单位：世界单位；只吸引可移动实体。")]
-        public float gravityRadius = 8;
-        [Tooltip("冷质量重力畸变的吸力强度；随距离衰减，同样吸力对轻物体加速更明显。")]
-        public float gravityForce = 30;
-        [Tooltip("引力源的实际质量必须大于此值；同时满足低温门槛才产生吸力，等于阈值不触发。")]
-        public float gravityMassThreshold=3;
-        [Tooltip("引力源温度必须低于此值，同时质量超过门槛才吸引附近物体，单位：°C；被吸引的目标不必低温。")]
-        public float gravityColdTemperature=-10;
+
+        [HideInInspector] public float gravityRadius = 8;
+
+        [HideInInspector] public float gravityForce = 30;
+
+        [HideInInspector] public float gravityMassThreshold=3;
+
+        [HideInInspector] public float gravityColdTemperature=-10;
         [HideInInspector] public float gravityDensityThreshold=12; // Historical benchmark only.
         [Header("冷热辐射、灼伤冰伤与蒸汽波")]
         [Tooltip("基础传热距离，单位：世界单位；附近实体交换热量的实际半径。")]
@@ -276,13 +378,12 @@ namespace PhaseArena
         public Color crowdingRingColor=new Color(1,.58f,.15f,.9f);
         [Min(0), Tooltip("超过数量门槛后，每多一个周围实体，该角色每秒增加的拥挤伤害。")]
         public float crowdingDamagePerExcessPerSecond=3;
-        [Header("莱顿弗罗斯特：热胀斥力")]
-        [Tooltip("莱顿弗罗斯特斥力要求双方温差大于此值，单位：°C。")]
-        public float repulsionTemperatureGap = 80;
-        [Tooltip("莱顿弗罗斯特斥力作用的碰撞体表面间距，单位：世界单位。")]
-        public float repulsionRange = .6f;
-        [Tooltip("莱顿弗罗斯特每度温差的斥力系数；实际还受距离和质量影响。")]
-        public float repulsionPerDegree = .3f;
+
+        [HideInInspector] public float repulsionTemperatureGap = 80;
+
+        [HideInInspector] public float repulsionRange = .6f;
+
+        [HideInInspector] public float repulsionPerDegree = .3f;
         [Header("旧极寒脆性（已移出随机池）")]
         [Tooltip("旧极寒脆性法则的冻结温度门槛，单位：°C；该法则已移出随机池。")]
         public float shockFrozenTemperature = -50;

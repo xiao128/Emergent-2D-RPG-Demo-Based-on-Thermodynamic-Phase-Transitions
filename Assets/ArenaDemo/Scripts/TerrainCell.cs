@@ -11,12 +11,13 @@ namespace PhaseArena
         public SpriteRenderer surface;
         public GameObject waterBlocker;
         public Vector2 size = Vector2.one;
+        public float HeatCapacity => ArenaDirector.Instance!=null ? Mathf.Max(ArenaDirector.Instance.tuning.minimumHeatCapacity,ArenaDirector.Instance.tuning.terrainThermalMass*ArenaDirector.Instance.tuning.specificHeatCapacity) : 4;
         public bool Contains(Vector2 p) => Mathf.Abs(p.x - transform.position.x) <= size.x / 2 && Mathf.Abs(p.y - transform.position.y) <= size.y / 2;
         public void AddHeat(float amount)
         {
             if(rough) return;
             var t=ArenaDirector.Instance!=null ? ArenaDirector.Instance.tuning : null;
-            temperature=Mathf.Clamp(temperature+amount,t!=null ? t.minimumTemperature : -600,t!=null ? t.maximumTemperature : 800);
+            temperature=Mathf.Clamp(temperature+amount/HeatCapacity,t!=null ? t.minimumTemperature : -1000,t!=null ? t.maximumTemperature : 1000);
             Refresh();
         }
         public void Tick(float dt) { if (!rough) { temperature = Mathf.MoveTowards(temperature,20,1.2f*dt); Refresh(); } }

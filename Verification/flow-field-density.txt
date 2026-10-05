@@ -1,0 +1,5 @@
+denseBodies=250
+meanLawTickMs=94.64
+fieldTargetsAppliedOnce=250
+neighborCandidates=62500
+fieldApplicationsBounded=True

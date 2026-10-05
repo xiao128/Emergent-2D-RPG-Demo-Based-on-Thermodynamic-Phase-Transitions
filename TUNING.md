@@ -71,31 +71,31 @@ WorldTuning 中还有法杖冲量/伤害、成球时间、石弹最大尺寸、�
 
 升高最大生命后，回血量也按新上限计算；不会超过满血。同时清除冷热状态，不耗法力。
 
-## 冷质量重力畸变
+## 压强对流场（替代冷质量重力畸变）
 
-位于「撞击升温、磨损、爆炸与冷质量引力」分组，需要抽到该法则才生效。
+WorldTuning「压强对流场：冷热径向风场」分组。抽到该法则后，高温排斥、低温吸引，无源质量门槛。
 
-| Inspector 字段 | 中文作用 | 当前值 |
+| 字段 | 作用 | 默认 |
 | --- | --- | --- |
-| Gravity Cold Temperature | 引力源温度必须低于此值，单位：°C | -10 |
-| Gravity Mass Threshold | 引力源实际质量必须大于此值，等于不触发 | 3 |
-| Gravity Radius | 吸引范围，单位：世界单位 | 8 |
-| Gravity Force | 吸力强度，随距离衰减 | 30 |
+| Pressure Radius | 影响半径 | 4 |
+| Pressure Temperature Dead Zone | 相对环境温差的静默区 | 10°C |
+| Pressure Force Per Degree | 每度温差对应风力，乘平方距离衰减 | 0.025 |
+| Pressure Maximum Force | 单个源对单个目标的最大力 | 50 |
 
-两项门槛同时满足才产生引力。质量 1 的小冷球不触发，质量约 3.402 的满蓄冰石会触发，大热石不触发；加热或磨损使其不再达标就停止吸引。角色、物品和双方投射物共用判断；被吸引的目标只需是附近可移动实体，不必低温。
+作用力积分为冲量后交给 Rigidbody2D，因此加速度反比于目标质量。旧 Gravity 字段和温差斥力字段仅保留序列化兼容并隐藏，不再用于玩法。
 
 ## 摩擦生热与热磨损
 
-WorldTuning「摩擦生热与热磨损（两个独立法则）」分组，四项均有中文 Tooltip。两个法则各自抽取，任意一项都能独立生效。
+WorldTuning「摩擦生热与热磨损（两个独立法则）」分组，所有项均有中文 Tooltip。两个法则各自抽取，任意一项都能独立生效。
 
 | Inspector 字段 | 作用 | 默认值 |
 | --- | --- | --- |
 | Friction Heat Gain | 速度平方 × 地面摩擦阻尼 × 此系数 × 时间产生温升；冰面不生热 | 0.09 |
 | Abrasion Speed Threshold | 速度严格高于此值才磨损，世界单位/秒 | 8 |
 | Abrasion Hot Temperature | 温度严格高于此值才磨损，°C | 40 |
-| Abrasion Per Meter | 每米损失的剩余质量比例，0.15 表示 15% | 0.15 |
+| Abrasion Mass Per Meter | 每米损失的固定质量，不是比例 | 0.2 |
 
-热磨损要求同时满足速度和温度门槛。每滑行 d 米，剩余质量乘以 `(1 - Abrasion Per Meter)^d`，不受步长影响。Minimum Mass Fraction 继续作为相对初始质量的消失门槛，默认 0.1。玩家、怪物和物品同样适用，普通步行速度 6 不磨损。
+热磨损要求同时满足速度和温度门槛。每滑行 d 米，实际质量减少 `Abrasion Mass Per Meter × d`，不受步长影响。Minimum Mass Fraction 继续作为相对初始质量的消失门槛，默认 0.1。玩家、怪物和物品同样适用，普通步行速度 6 不磨损。
 
 模型和碰撞体长宽按剩余质量的平方根缩小，让二维占地面积与质量同比变化；温度膨胀另外乘入。质量减半时长宽约为原来的 71%。缩小不改变当前速度，移除法则也不会自动补回已损失的质量；重新开始会复原。
 
@@ -142,3 +142,39 @@ WorldTuning「结算展示」分组的 **Result Display Delay** 默认 5，单�
 弹幕包含一发朝玩家瞄准的投射物及八发环形投射物，与近战恢复计时分离。召唤寻找附近空旷陆地，放不下时每秒重试，避免把守卫生成在障碍内部。召唤守卫沿用世界生命成长；Boss 战中不掉世界钟碎片。
 
 Boss Health 在「世界与生成数量」分组，仍是最终 Boss 的基础生命，实际乘以 Enemy Health Growth 的世界成长；Boss Attack Impulse 在「各类怪物冲撞冲量」分组，其余魔王独立参数统一放在「魔王追击、弹幕与召唤」。移动速度/推动力/基础质量以 WorldTuning 为准，修改魔王 Prefab 对应字段不再覆盖这些全局配置。
+
+## 最终世界钟仪式（默认第九关）
+
+World Count=9。第 1～8 关沿用守卫/碎片/选法则，第 9 关初始敌人数为零。
+
+| 字段 | 作用 | 默认 |
+| --- | --- | --- |
+| Boss Player Teleport Distance | 启动后向左移动的距离，最终落点由安全陆地校正 | 5 |
+| Boss Encounter Minion Delay | 音乐多少秒后开始随机普通怪召唤 | 3 |
+| Boss Encounter Minion Interval | 每只随机普通怪的间隔 | 1 秒 |
+| Boss Encounter Spawn Delay | 音乐多少秒后魔王在世界钟出现，并结束预热刷怪 | 15 |
+| Clock Interaction Radius | 玩家距离世界钟的可交互范围 | 2.25 |
+| Clock Click Radius | 鼠标点击世界钟的命中半径 | 1.1 |
+| Active Boss Clock Color | 启动后世界钟颜色 | 蓝色 |
+
+时间跟随实际 Boss 音乐播放位置；无可用音乐时按游戏计时。暂停会同时暂停音乐和召唤。魔王被击败后玩家仍能操作，返回钟再次点击/E 才通关，之后沿用移除玩家、等待 5 秒再展示结算的规则。
+
+## 统一热容量
+
+Specific Heat Capacity=1、Minimum Heat Capacity=0.05、Terrain Thermal Mass=4。输入热量除以热容量获得温度变化；Minimum/Maximum Temperature 已改为 -1000/+1000。Body Heat Conductivity=0.45，Terrain Heat Conductivity=0.35，控制热交换速度并限制单步不越过热平衡。初始火球/冰球自身仍分别是 150/-120°C，法球释放的热量脉冲现在按目标质量折算温升。
+
+## 新增法则参数
+
+Inspector 每个字段均有中文 Tooltip，以下按分组列出关键默认值。
+
+| 法则 | 门槛与主要参数 |
+| --- | --- |
+| 核聚变 | Fusion Minimum Speed=12（双方都严格超过）；Fusion Opposing Dot=-0.2；Radius=3、Damage Per Energy=0.12、Impulse=20、Heat=60 |
+| 莱顿弗罗斯特气垫滑行 | Glide Hot Temperature=60、Liquid Maximum Temperature=40、Duration=5 秒、Repulsion Force=8 |
+| 反冲工质 | Recoil Hot Temperature=200、Energy Fraction=0.5、Energy Per Mass=500、Exhaust Speed=30、Particle Lifetime=0.4 秒 |
+| 熔融粘滞与表面熔接 | Welding Hot Temperature=200、Base Friction=0.6、Friction Per Degree=0.08、Spring=80、Damping=8、Maximum Force=120、Contact Grace=0.2 秒、Maximum Pairs=64 |
+| 伯努利尾流负压 | Wake Speed Per Diameter=10、Radius Per Diameter=2.5、Minimum/Maximum Radius=1.2/8、Forward Exclusion Dot=0.35、Force Coefficient=0.012、Maximum Force=50 |
+
+气垫不取消真实河岸撞击伤害。冰面无阻挡碰撞时，使用地格最近边缘作为俯视二维平面内的接触法线。熔接使用切向阻尼加法线临时弹簧，不修改共享物理材质、不生成大量 Joint。喷气粒子仅用于表现，不增加真实实体、不占 250 投射物池。二维体积按占地面积处理，模型线性尺寸为质量比例的平方根。
+
+气垫启用时地面阻尼与碰撞材质摩擦均为零，到期恢复原材质；冷物反弹的弹性保留。反冲工质也作用于固定可破坏树木，树木缩小但保持固定；均匀内部生热没有指定受热面，不产生任意方向的净反冲。

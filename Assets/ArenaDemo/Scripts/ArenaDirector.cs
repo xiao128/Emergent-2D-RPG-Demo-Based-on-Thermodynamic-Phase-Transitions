@@ -11,7 +11,7 @@ namespace PhaseArena
     [Serializable] public class RunMetrics
     {
         public int spawned, kills, shots, collisions, frozenTiles, meltedTiles, upgrades, arcs, vaporBursts, explosions, collectedFragments;
-        public int repulsions, thermalShocks, crushTicks;
+        public int repulsions, thermalShocks, crushTicks, fusions, recoilEvents, welds;
         public float seconds, enemyDamage, environmentalEnemyDamage, directEnemyDamage, largestImpact;
         public float EnvironmentShare => enemyDamage>0 ? environmentalEnemyDamage/enemyDamage : 0;
     }
@@ -63,7 +63,7 @@ namespace PhaseArena
             Players.Capture();
             foreach(var b in FindObjectsOfType<ThermoBody>()) Register(b);
         }
-        void OnDestroy() { if(Instance==this) { Instance=null; Time.timeScale=1; } }
+        void OnDestroy() { if(contactLaws!=null) contactLaws.Dispose(); if(Instance==this) { Instance=null; Time.timeScale=1; } }
         public bool Has(WorldLaw law) => laws.Contains(law);
         public float ForceMultiplier => 1;
         public void Register(ThermoBody b) { registry.Register(b); }
@@ -90,6 +90,7 @@ namespace PhaseArena
         public void ReturnToTitle()
         {
             Outcome.Cancel();
+            Encounter.Reset(); ContactLaws.Clear();
             StopAllCoroutines(); Time.timeScale=1; Paused=false; State=RunState.Title;
             laws.Clear(); Choices=new WorldLaw[0]; Fragments=0; World=0; DeathCause=null;
             GuardsRemaining=0; thermalTimer=messageUntil=ReactionUntil=0; RecentReaction=null;
@@ -108,7 +109,7 @@ namespace PhaseArena
             var children=new List<GameObject>();
             foreach(Transform child in entities) children.Add(child.gameObject);
             foreach(var child in children) { child.SetActive(false); Destroy(child); }
-            shards.Clear(); Collisions.Clear();
+            shards.Clear(); Collisions.Clear(); ContactLaws.Clear();
         }
         void BuildWorld()
         {
@@ -116,9 +117,10 @@ namespace PhaseArena
             int seed=unchecked(RunSeed+World*104729);
             clock.position=WorldLayout.ClockAt(tuning);
             worldGenerator.Generate(seed,SpawnPosition);
+            Encounter.Reset();
             player.ResetAt(SpawnPosition); player.GetComponent<PlayerMage>().ResetTools();
             int i=0;
-            foreach(var p in worldGenerator.Layout.monsters)
+            if(World<tuning.worldCount) foreach(var p in worldGenerator.Layout.monsters)
             {
                 Spawn(i%5==4 && rangedEnemyPrefab!=null ? rangedEnemyPrefab : i%3==0 ? lightEnemyPrefab : i%3==1 ? mediumEnemyPrefab : heavyEnemyPrefab,p); i++;
             }
@@ -136,14 +138,12 @@ namespace PhaseArena
             }
             else
             {
-                var boss=Spawn(bossPrefab,clock.position); boss.maxHealth=tuning.EnemyHealthAt(tuning.bossHealth,World); boss.health=boss.maxHealth;
-                boss.GetComponent<EnemyBrain>().SetHome(clock.position,true);
-                State=RunState.Boss; Message="第八周目：魔王出现在中央世界钟！用累计的法则击败它。";
+                State=RunState.Explore; Message="最终世界没有敌人：来到右侧世界钟，点击或按 E 启动召唤仪式。";
             }
             if(hud!=null && hud.minimap!=null) hud.minimap.Rebuild();
             var follow=Camera.main!=null ? Camera.main.GetComponent<ArenaCameraFollow>() : null;
             if(follow!=null) follow.Snap();
-            Debug.Log("[PhaseArena] World "+World+" seed="+seed+" laws="+laws.Count+" roamers="+worldGenerator.Layout.monsters.Count);
+            Debug.Log("[PhaseArena] World "+World+" seed="+seed+" laws="+laws.Count+" roamers="+(World<tuning.worldCount ? worldGenerator.Layout.monsters.Count : 0));
         }
         public ThermoBody Spawn(ThermoBody prefab,Vector2 p)
         {
@@ -175,6 +175,8 @@ namespace PhaseArena
             metrics.seconds+=Time.deltaTime;
             if(clockHand!=null) clockHand.Rotate(0,0,-Time.deltaTime*24);
             if(Input.GetKeyDown(KeyCode.E)) TryOpenClock();
+            if(Input.GetMouseButtonDown(0) && PointerOverClock() && (UnityEngine.EventSystems.EventSystem.current==null || !UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())) TryOpenClock();
+            Encounter.Tick(Time.deltaTime,true);
             if(messageUntil>0 && Time.time>messageUntil)
             {
                 messageUntil=0;
@@ -184,6 +186,7 @@ namespace PhaseArena
         void FixedUpdate()
         {
             if(!SimulationActive) return;
+            ContactLaws.Tick(Time.fixedDeltaTime);
             thermalTimer+=Time.fixedDeltaTime;
             if(thermalTimer<.1f) return;
             float dt=thermalTimer; thermalTimer=0; ThermalTick(dt);
@@ -191,14 +194,16 @@ namespace PhaseArena
 
         public bool TryOpenClock()
         {
-            if(State!=RunState.Explore || player.Dead || Vector2.Distance(player.Body.position,clock.position)>2.25f) return false;
+            if(!SimulationActive || player==null || player.Dead || Vector2.Distance(player.Body.position,clock.position)>tuning.clockInteractionRadius) return false;
+            if(Encounter.FinalWorld) return Encounter.Activate();
+            if(State!=RunState.Explore) return false;
             if(Fragments<2) { Message="世界钟需要两枚碎片：击败守卫后，靠近碎片拾取。"; return false; }
             var available=new List<WorldLaw>();
             // Temporarily excluded from random offers while hot-projectile damage is rebalanced.
             foreach(WorldLaw law in Enum.GetValues(typeof(WorldLaw)))
                 if(WorldLawCatalog.IsAvailable(law) && !Has(law)) available.Add(law);
             for(int i=available.Count-1;i>0;i--) { int j=lawRandom.Next(i+1); var t=available[i]; available[i]=available[j]; available[j]=t; }
-            Choices=available.GetRange(0,3).ToArray(); State=RunState.Upgrade; Time.timeScale=0; hud.ShowChoices(); return true;
+            Choices=available.GetRange(0,Mathf.Min(3,available.Count)).ToArray(); State=RunState.Upgrade; Time.timeScale=0; hud.ShowChoices(); return true;
         }
         public bool ChooseLaw(int index)
         {
@@ -268,7 +273,7 @@ namespace PhaseArena
                 metrics.kills++; Pulse(b.Body.position,new Color(.6f,.9f,.65f),.65f);
                 var enemy=b.GetComponent<EnemyBrain>();
                 player.GetComponent<PlayerProgression>().AwardKill(enemy!=null ? enemy.experienceReward : 20);
-                if(b.isElite && State==RunState.Explore)
+                if(b.isElite && State==RunState.Explore && !Encounter.FinalWorld)
                 {
                     GuardsRemaining=Mathf.Max(0,GuardsRemaining-1);
                     Vector2 p=worldGenerator.SafeDryPosition(b.Body.position,.7f);
@@ -277,9 +282,7 @@ namespace PhaseArena
                 }
                 if(b.kind==BodyKind.Boss && State==RunState.Boss)
                 {
-                    State=RunState.Victory; Time.timeScale=0; Message="魔王已被击败，世界钟试炼完成！";
-                    Outcome.Begin();
-                    Debug.Log("[PhaseArena] Victory worlds="+World+" environmentShare="+metrics.EnvironmentShare);
+                    Encounter.BossDefeated();
                 }
             }
             if(b.kind==BodyKind.Player)
@@ -291,6 +294,25 @@ namespace PhaseArena
         }
 
         CollisionRules collisionRules;
+        ContactLawSimulation contactLaws;
+        FlowFieldSimulation flowFields;
+        BossEncounterSequence encounter;
+        public ContactLawSimulation ContactLaws => contactLaws ?? (contactLaws=new ContactLawSimulation(this));
+        public FlowFieldSimulation FlowFields => flowFields ?? (flowFields=new FlowFieldSimulation(this));
+        public BossEncounterSequence Encounter => encounter ?? (encounter=new BossEncounterSequence(this));
+        public void SetMessage(string text) {Message=text; messageUntil=0;}
+        public void BeginBossEncounter() {State=RunState.Boss; SetMessage("世界钟变蓝："+tuning.bossEncounterMinionDelay.ToString("0.#")+" 秒后开始召唤，"+tuning.bossEncounterSpawnDelay.ToString("0.#")+" 秒后魔王降临。");}
+        public bool PointerOverClock()
+        {
+            if(player==null || clock==null || Camera.main==null || !SimulationActive) return false;
+            return Vector2.Distance(player.Body.position,clock.position)<=tuning.clockInteractionRadius
+                && Vector2.Distance(Camera.main.ScreenToWorldPoint(Input.mousePosition),clock.position)<=tuning.clockClickRadius;
+        }
+        public void CompleteRun()
+        {
+            State=RunState.Victory; Time.timeScale=0; Message="魔王已被击败，世界钟试炼完成！";
+            Outcome.Begin(); Debug.Log("[PhaseArena] Victory worlds="+World+" environmentShare="+metrics.EnvironmentShare);
+        }
         ArenaPlayerLifecycle players;
         RunOutcomePresentation outcome;
         public ArenaPlayerLifecycle Players => players ?? (players=new ArenaPlayerLifecycle(this));

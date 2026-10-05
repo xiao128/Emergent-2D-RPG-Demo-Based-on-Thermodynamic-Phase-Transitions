@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   width: 72
   height: 56
-  worldCount: 8
+  worldCount: 9
   roamingCount: 19
   rockCount: 48
   treeCount: 22
@@ -46,7 +46,7 @@ MonoBehaviour:
   projectileHealth: 160
   projectileChargeDuration: 0.3
   stoneFullChargeDuration: 2
-  stoneMaximumRockScale: 1.2
+  stoneMaximumRockScale: 1.5
   maximumProjectiles: 250
   castCooldown: 0.65
   shieldRadius: 1.15
@@ -78,9 +78,9 @@ MonoBehaviour:
   enemyStandOffFraction: 0.75
   enemyProjectileImpulse: 24
   rangedAttackRange: 9
-  bossBaseMass: 8
+  bossBaseMass: 30
   bossMoveSpeed: 2
-  bossDriveForce: 40
+  bossDriveForce: 60
   bossWindup: 1.1
   bossAttackCooldown: 3.5
   bossRecovery: 1.2
@@ -101,8 +101,8 @@ MonoBehaviour:
   actorSpeedLimit: 60
   spellSpeedLimit: 160
   ambientTemperature: 20
-  minimumTemperature: -600
-  maximumTemperature: 800
+  minimumTemperature: -1000
+  maximumTemperature: 1000
   ambientRecovery: 1.8
   windRecovery: 0.18
   overheatDamageLimit: 0.1
@@ -118,8 +118,55 @@ MonoBehaviour:
   frictionHeatGain: 0.09
   abrasionSpeedThreshold: 8
   abrasionHotTemperature: 40
-  abrasionPerMeter: 0.15
+  abrasionPerMeter: 0.05
+  abrasionMassPerMeter: 0.2
   minimumMassFraction: 0.1
+  specificHeatCapacity: 1
+  minimumHeatCapacity: 0.05
+  terrainThermalMass: 4
+  bodyHeatConductivity: 0.45
+  terrainHeatConductivity: 0.35
+  bossPlayerTeleportDistance: 5
+  bossEncounterMinionDelay: 3
+  bossEncounterMinionInterval: 1
+  bossEncounterSpawnDelay: 15
+  clockInteractionRadius: 2.25
+  clockClickRadius: 1.1
+  activeBossClockColor: {r: 0.25, g: 0.7, b: 1, a: 1}
+  fusionMinimumSpeed: 12
+  fusionOpposingDot: -0.2
+  fusionRadius: 3
+  fusionDamagePerEnergy: 0.12
+  fusionImpulse: 20
+  fusionHeat: 60
+  glideHotTemperature: 60
+  glideLiquidMaximumTemperature: 40
+  glideDuration: 5
+  glideRepulsionForce: 8
+  pressureRadius: 4
+  pressureTemperatureDeadZone: 10
+  pressureForcePerDegree: 0.025
+  pressureMaximumForce: 50
+  recoilHotTemperature: 200
+  recoilEnergyFraction: 0.5
+  recoilEnergyPerMass: 500
+  recoilExhaustSpeed: 30
+  recoilParticleLifetime: 0.4
+  weldingHotTemperature: 200
+  weldingBaseFriction: 0.6
+  weldingFrictionPerDegree: 0.08
+  weldingSpring: 80
+  weldingDamping: 8
+  weldingMaximumForce: 120
+  weldingContactGrace: 0.2
+  weldingMaximumPairs: 64
+  wakeSpeedPerDiameter: 10
+  wakeRadiusPerDiameter: 2.5
+  wakeMinimumRadius: 1.2
+  wakeMaximumRadius: 8
+  wakeForwardExclusionDot: 0.35
+  wakeForceCoefficient: 0.012
+  wakeMaximumForce: 50
   fissionMass: 0.3
   fissionSpeed: 10
   fissionMinimumEnergy: 6

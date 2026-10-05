@@ -4,7 +4,7 @@ PASS Existing serialized law IDs preserved
 PASS Heating alone never erodes mass
 PASS Heating scales with friction coefficient
 PASS Ice prevents friction heating
-PASS One meter removes 15 percent remaining mass
+PASS One meter removes 0.2 fixed mass
 PASS Wear alone does not heat
 PASS Visual and collider shrink with square root mass
 PASS 2D occupied area follows remaining mass
