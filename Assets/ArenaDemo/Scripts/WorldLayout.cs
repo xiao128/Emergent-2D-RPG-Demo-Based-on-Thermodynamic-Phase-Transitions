@@ -28,6 +28,7 @@ namespace PhaseArena
         public readonly HashSet<Vector2Int> reachable = new HashSet<Vector2Int>();
         readonly HashSet<Vector2Int> blocked = new HashSet<Vector2Int>();
         readonly System.Random rng;
+        public readonly float enemySpawnClearance;
         public Vector2 Min => new Vector2(-width*.5f,-height*.5f);
         public Vector2 Max => -Min;
         public Vector2Int Cell(Vector2 p) => new Vector2Int(Mathf.FloorToInt(p.x),Mathf.FloorToInt(p.y));
@@ -35,9 +36,10 @@ namespace PhaseArena
         public static Vector2 SpawnAt(ArenaTuning t) => new Vector2(-t.width*.5f+t.edgeInset,0);
         public static Vector2 ClockAt(ArenaTuning t) => new Vector2(t.width*.5f-t.edgeInset,0);
 
-        public WorldLayout(ArenaTuning tuning, int layoutSeed, Vector2 start)
+        public WorldLayout(ArenaTuning tuning, int layoutSeed, Vector2 start,float enemyClearance=0)
         {
             width=tuning.width; height=tuning.height; seed=layoutSeed; spawn=start;
+            enemySpawnClearance=enemyClearance>0 ? enemyClearance : Mathf.Max(5,tuning.rangedAttackRange+Mathf.Max(0,tuning.enemySpawnSafetyMargin));
             clock=ClockAt(tuning); guards=new[]{clock+new Vector2(-4,-3),clock+new Vector2(-4,3)};
             rng=new System.Random(seed);
             // One continuous river in the upper middle. Its footprint never
@@ -75,23 +77,26 @@ namespace PhaseArena
                 Vector2 p=new Vector2(-width*.5f+6+col*(width-12)/4f+(float)(rng.NextDouble()-.5)*3,
                     -height*.5f+6+row*(riverBottom+height*.5f-9)/3f+(float)(rng.NextDouble()-.5)*2);
                 p=NearestDry(p,1);
-                if(Vector2.Distance(p,clock)<8 || Vector2.Distance(p,spawn)<5)
+                if(!SafeMonsterPosition(p))
                 {
                     for(int attempt=0;attempt<80;attempt++)
                     {
                         p=NearestDry(RandomPoint(3),1);
-                        if(Vector2.Distance(p,clock)>=8 && Vector2.Distance(p,spawn)>=5 && monsters.TrueForAll(m=>Vector2.Distance(m,p)>5)) break;
+                        if(SafeMonsterPosition(p) && monsters.TrueForAll(m=>Vector2.Distance(m,p)>5)) break;
                     }
                 }
-                if(monsters.TrueForAll(m=>Vector2.Distance(m,p)>3.5f)) monsters.Add(p);
+                // NearestDry can move the candidate, and retry exhaustion is not
+                // success. Always validate the final point before inserting it.
+                if(SafeMonsterPosition(p) && monsters.TrueForAll(m=>Vector2.Distance(m,p)>3.5f)) monsters.Add(p);
             }
             for(int attempt=0;attempt<2000 && monsters.Count<tuning.roamingCount;attempt++)
             {
                 Vector2 p=NearestDry(RandomPoint(3),1);
-                if(Vector2.Distance(p,clock)>8 && Vector2.Distance(p,spawn)>5 && monsters.TrueForAll(m=>Vector2.Distance(m,p)>3.5f)) monsters.Add(p);
+                if(SafeMonsterPosition(p) && monsters.TrueForAll(m=>Vector2.Distance(m,p)>3.5f)) monsters.Add(p);
             }
             if(monsters.Count>tuning.roamingCount) monsters.RemoveRange(tuning.roamingCount,monsters.Count-tuning.roamingCount);
         }
+        bool SafeMonsterPosition(Vector2 p) => IsDry(p) && Vector2.Distance(p,clock)>=8 && Vector2.Distance(p,spawn)>enemySpawnClearance;
         float DistanceToSegment(Vector2 p,Vector2 a,Vector2 b)
         {
             Vector2 d=b-a; float t=d.sqrMagnitude>.001f ? Mathf.Clamp01(Vector2.Dot(p-a,d)/d.sqrMagnitude) : 0;
@@ -188,7 +193,7 @@ namespace PhaseArena
         public bool Validate()
         {
             if(!IsReachable(clock) || !IsReachable(guards[0]) || !IsReachable(guards[1])) return false;
-            foreach(var p in monsters) if(!IsDry(p)) return false;
+            foreach(var p in monsters) if(!SafeMonsterPosition(p)) return false;
             return reachable.Count>width*height*.45f;
         }
     }

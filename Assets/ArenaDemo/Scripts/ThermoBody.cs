@@ -70,11 +70,12 @@ namespace PhaseArena
                 return glide.Active ? 0 : world!=null ? GroundDragAt(world.FloorAt(Body.position),world) : Body.drag;
             }
         }
+        public const float NormalActorDrag=4.5f;
         float GroundDragAt(TerrainCell floor,ArenaDirector world)
         {
             var t=world.tuning;
             bool ice=floor!=null && !floor.rough && floor.phase==FloorPhase.Ice;
-            float drag=ice ? t.iceDrag : floor!=null && floor.rough ? (IsActor ? 6 : t.roughRockDrag) : IsActor ? 4.5f : t.normalRockDrag;
+            float drag=ice ? t.iceDrag : floor!=null && floor.rough ? (IsActor ? 6 : t.roughRockDrag) : IsActor ? NormalActorDrag : t.normalRockDrag;
             if(world.Has(WorldLaw.SuperSlide) && temperature<-50) drag*=.05f;
             return drag;
         }

@@ -1,0 +1,7 @@
+stone=0 fire=0 initial=-180 heat=-142.5 temperature_after_1s_speed6=-178.08 capacity=1
+stone=0 fire=1 initial=225 heat=157.5 temperature_after_1s_speed6=223.08 capacity=1
+stone=1 fire=0 initial=-180 heat=-142.5 temperature_after_1s_speed6=-179.4356 capacity=3.402
+stone=1 fire=1 initial=225 heat=157.5 temperature_after_1s_speed6=224.4356 capacity=3.402
+enemy_initial=150 enemy_heat=105
+checks=13 failures=0
+Separate pre-existing layout failure: random seed 173911801 failed WorldLayout.Validate before thermal checks.

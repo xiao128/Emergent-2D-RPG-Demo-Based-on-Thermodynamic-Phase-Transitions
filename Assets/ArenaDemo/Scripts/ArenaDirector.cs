@@ -116,7 +116,7 @@ namespace PhaseArena
             ClearRuntime(); Fragments=0; GuardsRemaining=World<tuning.worldCount ? 2 : 0; Choices=new WorldLaw[0];
             int seed=unchecked(RunSeed+World*104729);
             clock.position=WorldLayout.ClockAt(tuning);
-            worldGenerator.Generate(seed,SpawnPosition);
+            worldGenerator.Generate(seed,SpawnPosition,EnemyAttackPhysics.SpawnClearance(this));
             Encounter.Reset();
             player.ResetAt(SpawnPosition); player.GetComponent<PlayerMage>().ResetTools();
             int i=0;

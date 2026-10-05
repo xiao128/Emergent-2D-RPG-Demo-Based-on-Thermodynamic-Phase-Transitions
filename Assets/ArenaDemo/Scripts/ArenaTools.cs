@@ -62,7 +62,11 @@ namespace PhaseArena
             var shot=UnityEngine.Object.Instantiate(projectilePrefab,spawn,Quaternion.identity,entities);
             shot.gameObject.layer=8;
             bool stone=UsesStoneMagic(caster);
-            shot.owner=caster; shot.shotHeat=heat; shot.temperature=heat>0 ? 150 : -120; shot.baseMass=profile.Mass;
+            bool playerShot=caster.kind==BodyKind.Player;
+            shot.owner=caster;
+            shot.shotHeat=heat*(playerShot ? Mathf.Max(0,tuning.playerProjectileHeatMultiplier) : 1);
+            shot.temperature=playerShot ? (heat>0 ? tuning.playerFireProjectileTemperature : tuning.playerIceProjectileTemperature) : heat>0 ? 150 : -120;
+            shot.baseMass=profile.Mass;
             shot.maxHealth=tuning.projectileHealth; shot.health=shot.maxHealth;
             shot.lifetime=0;
             shot.visual.sprite=ProjectileSprite(caster,heat);

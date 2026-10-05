@@ -16,14 +16,14 @@ namespace PhaseArena
         public readonly List<ThermoBody> props=new List<ThermoBody>();
         public Vector2 Min => new Vector2(-tuning.width*.5f,-tuning.height*.5f);
         public Vector2 Max => -Min;
-        public void Generate(int seed,Vector2 spawn)
+        public void Generate(int seed,Vector2 spawn,float enemySpawnClearance=0)
         {
             if(generatedRoot!=null)
             {
                 generatedRoot.gameObject.SetActive(false);
                 if(Application.isPlaying) Destroy(generatedRoot.gameObject); else DestroyImmediate(generatedRoot.gameObject);
             }
-            props.Clear(); cells.Clear(); Layout=new WorldLayout(tuning,seed,spawn);
+            props.Clear(); cells.Clear(); Layout=new WorldLayout(tuning,seed,spawn,enemySpawnClearance);
             if(!Layout.Validate()) throw new InvalidOperationException("Seeded world has an unreachable clock/guard: "+seed);
             generatedRoot=new GameObject("Generated World · "+seed).transform; generatedRoot.SetParent(transform,false);
             Draw("Meadow",generatedRoot,Vector2.zero,new Vector2(tuning.width,tuning.height),new Color(.13f,.22f,.18f),-100);

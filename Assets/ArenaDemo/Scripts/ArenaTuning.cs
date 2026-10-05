@@ -14,6 +14,8 @@ namespace PhaseArena
         public int worldCount = 9;
         [Tooltip("每个世界随机生成的游荡怪物数量，不含守卫和 Boss。")]
         public int roamingCount = 19;
+        [Min(0), Tooltip("游荡怪出生时，在最大攻击范围之外额外留出的安全距离。会自动考虑远程射程、近战冲量、质量和体积；单位：世界单位，重新生成关卡时生效。")]
+        public float enemySpawnSafetyMargin = 3;
         [Tooltip("可移动普通石头的生成数量。")]
         public int rockCount = 48;
         [Tooltip("可破坏树木的生成数量。")]
@@ -69,6 +71,12 @@ namespace PhaseArena
         public float staffDamage = 12;
         [Tooltip("普通冷热法球的基础质量；挥石魔法改用石头质量并随蓄力面积增长。")]
         public float spellMass = 1;
+        [Tooltip("玩家火系投射物生成时的温度，单位：°C；普通法球和挥石魔法均适用。")]
+        public float playerFireProjectileTemperature=225;
+        [Tooltip("玩家冰系投射物生成时的温度，单位：°C；普通法球和挥石魔法均适用。")]
+        public float playerIceProjectileTemperature=-180;
+        [Min(0), Tooltip("玩家投射物碰撞及接触河流时输入冷热能量的倍率；1.5 为原来的 150%，目标温度变化仍除以自身热容量。")]
+        public float playerProjectileHeatMultiplier=1.5f;
         [HideInInspector] public float spellImpulse=6;
         [Tooltip("玩家与敌方投射物的初始生命值。")]
         public float projectileHealth = 160;
@@ -181,10 +189,10 @@ namespace PhaseArena
         public float minimumTemperature = -1000;
         [Tooltip("所有实体温度的硬性上限，单位：°C。")]
         public float maximumTemperature = 1000;
-        [Tooltip("静止物体每秒向常温恢复的温度，单位：°C/秒。")]
-        public float ambientRecovery = 1.8f;
-        [Tooltip("每单位移动速度带来的额外每秒回温；速度越快，回到常温越快。")]
-        public float windRecovery = .18f;
+        [Tooltip("静止物体每秒向常温恢复的基础热量；实际温度变化除以质量×比热容，冷热物体均逐渐回到常温。")]
+        public float ambientRecovery = 1.2f;
+        [Tooltip("每单位移动速度带来的额外每秒回温热量；实际温度变化除以热容量，速度越快回温越快。")]
+        public float windRecovery = .12f;
         [HideInInspector] public float overheatDamageLimit=.1f;
         [Tooltip("普通地面上物品的阻尼系数；越大减速越快，角色另有步行阻尼。")]
         public float normalRockDrag = .6f;

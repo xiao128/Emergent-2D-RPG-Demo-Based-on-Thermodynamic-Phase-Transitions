@@ -1,0 +1,2 @@
+enemies=21 unsafe=0 closest=12.74755 clearance=12 health=100
+health_after_idle=100, dead=False

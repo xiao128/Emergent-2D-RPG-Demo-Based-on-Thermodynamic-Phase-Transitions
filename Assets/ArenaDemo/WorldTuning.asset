@@ -16,6 +16,7 @@ MonoBehaviour:
   height: 56
   worldCount: 9
   roamingCount: 19
+  enemySpawnSafetyMargin: 3
   rockCount: 48
   treeCount: 22
   largeRockCount: 12
@@ -42,6 +43,9 @@ MonoBehaviour:
   staffImpulse: 22.5
   staffDamage: 12
   spellMass: 1
+  playerFireProjectileTemperature: 225
+  playerIceProjectileTemperature: -180
+  playerProjectileHeatMultiplier: 1.5
   spellImpulse: 6
   projectileHealth: 160
   projectileChargeDuration: 0.3
@@ -84,7 +88,7 @@ MonoBehaviour:
   bossWindup: 1.1
   bossAttackCooldown: 3.5
   bossRecovery: 1.2
-  bossProjectileImpulse: 48
+  bossProjectileImpulse: 40
   bossAggroRadius: 60
   bossVolleyInterval: 3
   bossRadialProjectiles: 8
@@ -103,8 +107,8 @@ MonoBehaviour:
   ambientTemperature: 20
   minimumTemperature: -1000
   maximumTemperature: 1000
-  ambientRecovery: 1.8
-  windRecovery: 0.18
+  ambientRecovery: 1.2
+  windRecovery: 0.12
   overheatDamageLimit: 0.1
   normalRockDrag: 0.6
   roughRockDrag: 1.6
@@ -116,10 +120,10 @@ MonoBehaviour:
   impactHeatFraction: 0.45
   impactTemperatureGain: 8
   frictionHeatGain: 0.09
-  abrasionSpeedThreshold: 8
-  abrasionHotTemperature: 40
+  abrasionSpeedThreshold: 10
+  abrasionHotTemperature: 60
   abrasionPerMeter: 0.05
-  abrasionMassPerMeter: 0.2
+  abrasionMassPerMeter: 0.1
   minimumMassFraction: 0.1
   specificHeatCapacity: 1
   minimumHeatCapacity: 0.05

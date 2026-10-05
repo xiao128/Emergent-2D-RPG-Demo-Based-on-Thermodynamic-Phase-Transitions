@@ -1,0 +1,3 @@
+checks=1211 failures=0 default_clearance=12 closest_enemy=12.02081
+
+expanded_ranged_clearance=33, expanded_melee_clearance=15.95477, failures=0
